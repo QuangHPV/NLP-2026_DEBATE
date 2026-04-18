@@ -1,0 +1,32 @@
+Validation results:
+- example_affirmative: VALID (OK)
+- example_negative: VALID (OK)
+
+Debate results:
+== Material: real_material_001.txt | Topic: 在高等教育数字化转型与平台化发展中，效率优先原则应当优于公平优先原则。 ==
+Matchup: example_affirmative (affirmative) vs example_negative (negative)
+Round 01 [affirmative] affirmative: 公平的基础是资源的可及性，而只有通过效率的提升才能扩大教育资源的整体供给，过度强调公平导致资源无法覆盖多数人，反而加剧了不公平。
+Round 01 [negative] negative: 效率的提升固然能够扩展教育资源的总量，但如果在分配过程中忽视公平，资源将可能过多集中于少数群体，导致教育机会的两极分化和数字鸿沟的加剧，效率的红利反而无法惠及绝大多数人。
+Round 02 [affirmative] affirmative: 公平无法独立存在于资源的匮乏中，若缺乏效率的驱动，所谓的公平只会沦为平均的贫瘠，与其维持表面的平等，不如通过效率提升创造更多资源，惠及更多潜在群体。
+Round 02 [negative] negative: 效率的提升可以创造更多资源，但如果这些资源的分配机制无法兼顾公平，最终只会进一步集中于拥有更多数字化优势和经济条件的少数群体，导致潜在群体反而被排斥在外，背离了教育促进社会流动的根本使命。
+Round 03 [affirmative] affirmative: 我们不能忽视的是，如果过于强调公平而牺牲效率，最终导致资源无法有效扩张，所谓的均等化机会只变成一群人抢一口汤，而不是创造成千上万碗粥。
+Round 03 [negative] negative: 第3轮 negative: 如果一味追求效率导致资源分配严重失衡，那么制造出来的“千碗粥”只会被少数人掌控，而大多数人仍仅能望而却步，最终破坏了教育作为社会流动工具的核心价值，与“惠及更多潜在群体”的初衷背道而驰。
+Round 04 [affirmative] affirmative: 过度强调公平只会导致资源在低效分配中逐渐耗尽，而效率的提升能够通过规模化创新扩大教育资源的可及性，让数字鸿沟逐步缩小，这才是解决深层不公平的根本路径。
+Round 04 [negative] negative: 第4轮 negative: 效率的提升并不能自动弥合数字鸿沟，相反，商业化平台的发展往往优先服务于已有资源和条件的群体，使得弱势群体被边缘化，教育资源的扩张反而可能强化不公平，长远来看，是效率驱动下的不公正破坏了社会的信任基础。
+Round 05 [affirmative] affirmative: 强调公平却忽视效率只会让教育资源分配停留在“理想阶段”，在现实中拉低整体教育水平，将原本可以改变社会现状的机会变成空谈，这是对公平理念最大的背叛。
+Round 05 [negative] negative: 若一味追求效率提升却忽视公平，资源的扩张只会服务于优先条件成熟的少数群体，大量处于弱势地位的人将被排除在数字教育之外，这种以牺牲公平为代价的效率不仅无法化解深层不公平，反而会进一步加剧社会分化，削弱高等教育应有的公共性与普惠意义。
+Round 06 [affirmative] affirmative: 过度强调公平而限制效率的提升，只会让有限的资源陷入低效分配的困局，最终剥夺弱势群体享有优质教育的可能，这才是真正加剧社会分化的根源。
+Round 06 [negative] negative: 强调效率优先却忽略公平，只会让原本不均的资源分配因数字化红利的倾斜更加悬殊，进一步固化社会阶层，而弱势群体在这种效率机器中被边缘化，使教育失去了促进社会流动与整体公平发展的根本意义，这才是真正对社会发展的背离。
+Round 07 [affirmative] affirmative: 过度强调公平反而会固化资源分配的现状，将欠发达地区和弱势群体困在低水平教育资源的循环中，效率才是破解这一瓶颈的唯一可行路径。
+Round 07 [negative] negative: 过度强调效率以突破资源瓶颈的逻辑忽略了一个关键问题：若未能同步保障公平，这些扩张的资源只会流向拥有更强获取能力的群体，而弱势群体依旧被排除在外，数字化红利变成少数人的特权，从而进一步放大现有的不平等，而非解决所谓的“瓶颈”。
+Round 08 [affirmative] affirmative: 强调公平却忽略效率，只会让教育资源的扩展变成一场等待而不可及的空谈，真正让弱势群体陷入“没有资源可公平分配”的逻辑悖论，这是对社会流动和进步最大的阻碍。
+Round 08 [negative] negative: 如果仅仅为了追求效率优先而忽视公平，就像在一块不平坦的起跑线上加速比赛，真正处于弱势的群体不仅得不到起跑的机会，甚至可能被快速拓展的教育体系彻底甩在身后，这种效率反倒会扩大教育不平等的鸿沟，与促进社会进步的初衷背道而驰。
+Round 09 [affirmative] affirmative: 过度强调公平优先，实际上是让高端资源的扩展止步于形式上的“均等”，最终导致优质教育资源无法有效触及弱势群体，维持的是表面公平，而非实际效益。
+Round 09 [negative] negative: 过度强调效率而轻视公平可能导致优质教育资源优先流向具备数字化优势的少数群体，而弱势群体则因数字鸿沟和经济门槛被进一步边缘化，这种效率的扩展只会让社会不平等从线下延续到线上，最终阻碍真正的社会流动和整体进步。
+Round 10 [affirmative] affirmative: 公平的目标是重要的，但如果没有效率作为推动力，所谓的公平只会沦为乌托邦式的空谈，数字资源无法快速扩展，只会让弱势群体永远困在资源贫瘠的死循环中。
+Round 10 [negative] negative: 如果单纯以效率为优先原则，将公平置于次要位置，所谓的资源扩展只会加剧“数字精英”和“数字贫民”的分化，弱势群体无法平等地进入资源扩展的起点，这种忽视公平的效率路径，不仅无法消除教育的不平等，反而会使社会阶层固化进一步加重，导致长期的社会失衡。
+Judge raw output: negative
+Judge fallback used: False
+Final winner: negative
+Summary: example_affirmative vs example_negative | winner=negative | judge_raw="negative" | judge_fallback=False | usage={"affirmative": {"chat_calls": 10, "prompt_chars": 59288, "response_chars": 699}, "negative": {"chat_calls": 10, "prompt_chars": 60148, "response_chars": 1066}}
+
