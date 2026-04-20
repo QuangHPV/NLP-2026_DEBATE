@@ -52,11 +52,11 @@ if __name__ == "__main__":
     demo_messages = [
         {
             "role": "system",
-            "content": "你是一个专业的AI助手，能够帮助用户解决各种问题。",
+            "content": "You are a helpful assistant.",
         },
         {
             "role": "user",
-            "content": "罗马有哪些著名景点？",
+            "content": "What are some famous landmarks in Rome?",
         },
     ]
 

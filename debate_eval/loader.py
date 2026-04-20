@@ -5,8 +5,12 @@ import importlib.util
 import inspect
 from pathlib import Path
 from types import ModuleType
+from typing import Callable
 
-from .api import BaseAgent, StudentAPI
+from .api import DebateHistory, ReadonlyDebateMaterial, Side
+
+
+StudentSpeaker = Callable[[ReadonlyDebateMaterial, DebateHistory, Side], str]
 
 
 @dataclass
@@ -15,7 +19,7 @@ class AgentLoadResult:
     path: Path
     is_valid: bool
     message: str
-    agent_class: type[BaseAgent] | None = None
+    speak_function: StudentSpeaker | None = None
 
 
 def _load_module(path: Path) -> ModuleType:
@@ -29,18 +33,49 @@ def _load_module(path: Path) -> ModuleType:
     return module
 
 
-def _validate_agent_class(agent_class: type[BaseAgent]) -> None:
-    if not issubclass(agent_class, BaseAgent):
-        raise TypeError("Agent must inherit from debate_eval.BaseAgent.")
+def _validate_speak_function(speak: StudentSpeaker) -> None:
+    if not callable(speak):
+        raise TypeError("speak must be callable.")
 
-    argue = getattr(agent_class, "argue", None)
-    if argue is None or not callable(argue):
-        raise TypeError("Agent must define an argue(chat_history) method.")
-
-    signature = inspect.signature(argue)
+    signature = inspect.signature(speak)
     parameters = list(signature.parameters.values())
-    if len(parameters) != 2:
-        raise TypeError("argue() must accept exactly two parameters: self and chat_history.")
+    if len(parameters) != 3:
+        raise TypeError(
+            "speak() must accept exactly three parameters: material, history, side."
+        )
+
+
+def load_student_agent(path: str | Path) -> AgentLoadResult:
+    student_path = Path(path)
+    try:
+        if not student_path.exists():
+            raise FileNotFoundError(f"Student file not found: {student_path}")
+        if not student_path.is_file():
+            raise TypeError(f"Student path is not a file: {student_path}")
+        if student_path.suffix != ".py":
+            raise TypeError(f"Student file must be a .py file: {student_path}")
+
+        module = _load_module(student_path)
+        speak = getattr(module, "speak", None)
+        if speak is None:
+            raise TypeError("Missing speak(material, history, side) function.")
+
+        _validate_speak_function(speak)
+    except Exception as exc:  # noqa: BLE001
+        return AgentLoadResult(
+            name=student_path.stem,
+            path=student_path,
+            is_valid=False,
+            message=str(exc),
+        )
+
+    return AgentLoadResult(
+        name=student_path.stem,
+        path=student_path,
+        is_valid=True,
+        message="OK",
+        speak_function=speak,
+    )
 
 
 def discover_student_agents(students_dir: str | Path) -> list[AgentLoadResult]:
@@ -53,38 +88,6 @@ def discover_student_agents(students_dir: str | Path) -> list[AgentLoadResult]:
         if path.name.startswith("_"):
             continue
 
-        try:
-            module = _load_module(path)
-            agent_class = getattr(module, "Agent", None)
-            if agent_class is None:
-                raise TypeError("Missing Agent class.")
-
-            _validate_agent_class(agent_class)
-            agent_class(
-                StudentAPI(agent_name=f"validate::{path.stem}"),
-                side="affirmative",
-                topic="validation topic",
-                material="validation material",
-            )
-        except Exception as exc:  # noqa: BLE001
-            results.append(
-                AgentLoadResult(
-                    name=path.stem,
-                    path=path,
-                    is_valid=False,
-                    message=str(exc),
-                )
-            )
-            continue
-
-        results.append(
-            AgentLoadResult(
-                name=path.stem,
-                path=path,
-                is_valid=True,
-                message="OK",
-                agent_class=agent_class,
-            )
-        )
+        results.append(load_student_agent(path))
 
     return results

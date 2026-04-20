@@ -2,18 +2,34 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import random
 
 from .engine import DebateMatch, load_materials, round_robin_pairs
-from .loader import discover_student_agents
+from .loader import AgentLoadResult, discover_student_agents, load_student_agent
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Student debate evaluation system")
     parser.add_argument("--students-dir", default="students", help="Directory of student agent files")
+    parser.add_argument(
+        "--affirmative-file",
+        default=None,
+        help="Specific student file to use as the affirmative side",
+    )
+    parser.add_argument(
+        "--negative-file",
+        default=None,
+        help="Specific student file to use as the negative side",
+    )
     parser.add_argument("--materials-dir", default="materials", help="Directory of debate materials")
     parser.add_argument("--material", default=None, help="Optional material file name to use")
-    parser.add_argument("--rounds", type=int, default=10, help="Number of debate rounds")
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=5,
+        help="Number of debate rounds per side; default is 5 rounds (10 total speeches)",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Random seed for judger")
     parser.add_argument(
         "--validate-only",
@@ -32,6 +48,27 @@ def _select_materials(materials_dir: str, material_name: str | None):
     return [material for material in materials if material.name == material_name]
 
 
+def _resolve_student_path(students_dir: str, file_value: str) -> Path:
+    raw_path = Path(file_value)
+    if raw_path.is_absolute():
+        return raw_path
+
+    direct = Path(file_value)
+    if direct.exists():
+        return direct
+
+    return Path(students_dir) / file_value
+
+
+def _load_requested_agents(args: argparse.Namespace) -> list[AgentLoadResult]:
+    affirmative_path = _resolve_student_path(args.students_dir, args.affirmative_file)
+    negative_path = _resolve_student_path(args.students_dir, args.negative_file)
+    return [
+        load_student_agent(affirmative_path),
+        load_student_agent(negative_path),
+    ]
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -39,7 +76,15 @@ def main() -> int:
     if args.seed is not None:
         random.seed(args.seed)
 
-    discovered = discover_student_agents(args.students_dir)
+    requested_matchup = args.affirmative_file is not None or args.negative_file is not None
+    if requested_matchup and (args.affirmative_file is None or args.negative_file is None):
+        print("Must provide both --affirmative-file and --negative-file.")
+        return 1
+
+    if requested_matchup:
+        discovered = _load_requested_agents(args)
+    else:
+        discovered = discover_student_agents(args.students_dir)
     if not discovered:
         print("No student agents found.")
         return 1
@@ -52,10 +97,17 @@ def main() -> int:
     if args.validate_only:
         return 0
 
-    valid_agents = [result for result in discovered if result.is_valid]
-    if len(valid_agents) < 2:
-        print("Need at least two valid student agents to run a debate.")
-        return 1
+    if requested_matchup:
+        if not all(result.is_valid for result in discovered):
+            print("The specified affirmative and negative student files must both be valid.")
+            return 1
+        matchups = [(discovered[0], discovered[1])]
+    else:
+        valid_agents = [result for result in discovered if result.is_valid]
+        if len(valid_agents) < 2:
+            print("Need at least two valid student agents to run a debate.")
+            return 1
+        matchups = round_robin_pairs(valid_agents)
 
     materials = _select_materials(args.materials_dir, args.material)
     if not materials:
@@ -66,11 +118,16 @@ def main() -> int:
     print("Debate results:")
     for material in materials:
         print(f"== Material: {material.name} | Topic: {material.topic} ==")
-        for agent_a, agent_b in round_robin_pairs(valid_agents):
+        for agent_a, agent_b in matchups:
+            if agent_a.speak_function is None or agent_b.speak_function is None:
+                continue
+
             print(f"Matchup: {agent_a.name} (affirmative) vs {agent_b.name} (negative)")
             match = DebateMatch(
-                affirmative_cls=agent_a.agent_class,
-                negative_cls=agent_b.agent_class,
+                affirmative_name=agent_a.name,
+                affirmative_speak=agent_a.speak_function,
+                negative_name=agent_b.name,
+                negative_speak=agent_b.speak_function,
                 material=material,
                 rounds=args.rounds,
                 seed=args.seed,

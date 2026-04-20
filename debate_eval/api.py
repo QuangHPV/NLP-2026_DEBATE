@@ -1,14 +1,34 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 import json
-from typing import Any
+from typing import Iterator, Literal
 
 from utils import student_chat
 
 
 ChatTemplate = list[dict[str, str]]
+Side = Literal["affirmative", "negative"]
+
+
+@dataclass(frozen=True)
+class ReadonlyDebateMaterial:
+    topic: str
+    content: str
+
+
+@dataclass(frozen=True)
+class ReadonlyDebateTurn:
+    round_index: int
+    side: Side
+    speaker: str
+    content: str
+
+
+DebateHistory = tuple[ReadonlyDebateTurn, ...]
 
 
 @dataclass
@@ -30,26 +50,24 @@ def _count_chars(chat_template: ChatTemplate) -> int:
 
 
 class StudentAPI:
-    """Utility methods exposed to students during evaluation."""
+    """Per-agent runtime used internally by the evaluator."""
 
     def __init__(self, agent_name: str):
         self.agent_name = agent_name
         self.usage = UsageStats()
 
-    def chat(
-        self,
-        messages: ChatTemplate | None = None,
-        *,
-        system_prompt: str | None = None,
-        user_prompt: str | None = None,
-        history: ChatTemplate | None = None,
-    ) -> str:
-        template = self._build_messages(
-            messages=messages,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            history=history,
-        )
+    @contextmanager
+    def activate(self) -> Iterator[None]:
+        token = _ACTIVE_API.set(self)
+        try:
+            yield
+        finally:
+            _ACTIVE_API.reset(token)
+
+    def chat(self, messages: ChatTemplate) -> str:
+        template = deepcopy(messages)
+        if not template:
+            raise ValueError("chat() requires at least one message.")
 
         self.usage.chat_calls += 1
         self.usage.prompt_chars += _count_chars(template)
@@ -57,101 +75,38 @@ class StudentAPI:
         self.usage.response_chars += len(response)
         return response
 
-    def _build_messages(
-        self,
-        messages: ChatTemplate | None = None,
-        *,
-        system_prompt: str | None = None,
-        user_prompt: str | None = None,
-        history: ChatTemplate | None = None,
-    ) -> ChatTemplate:
-        if messages is not None:
-            template = deepcopy(messages)
-        else:
-            template = deepcopy(history or [])
-            if system_prompt is not None and not any(
-                message.get("role") == "system" for message in template
-            ):
-                template.insert(0, {"role": "system", "content": system_prompt})
-            if user_prompt is not None:
-                template.append({"role": "user", "content": user_prompt})
-
-        if not template:
-            raise ValueError("chat() requires either messages or history/user_prompt content.")
-        return template
-
-    # Backward-compatible helper. It does not call the API.
-    def foward(
-        self,
-        chat_template: ChatTemplate,
-        content: str,
-        role: str = "user",
-    ) -> ChatTemplate:
-        template = deepcopy(chat_template)
-        template.append({"role": role, "content": content})
-        return template
-
-    def forward(
-        self,
-        chat_template: ChatTemplate,
-        content: str,
-        role: str = "user",
-    ) -> ChatTemplate:
-        return self.foward(chat_template, content=content, role=role)
-
-    # Backward-compatible helper. The actual model call still goes through utils.py.
-    def generate(self, chat_template: ChatTemplate) -> str:
-        return self.chat(chat_template)
-
     def usage_json(self) -> str:
         return json.dumps(self.usage.to_dict(), ensure_ascii=False, indent=2)
 
 
-class BaseAgent:
-    """Students should inherit from this class and implement argue()."""
+_ACTIVE_API: ContextVar[StudentAPI | None] = ContextVar("student_api", default=None)
 
-    def __init__(self, api: StudentAPI, side: str, topic: str, material: str):
-        self.api = api
-        self.side = side
-        self.topic = topic
-        self.material = material
 
-    def chat(
-        self,
-        messages: ChatTemplate | None = None,
-        *,
-        system_prompt: str | None = None,
-        user_prompt: str | None = None,
-        history: ChatTemplate | None = None,
-    ) -> str:
-        return self.api.chat(
-            messages=messages,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            history=history,
+def _require_active_api() -> StudentAPI:
+    api = _ACTIVE_API.get()
+    if api is None:
+        raise RuntimeError(
+            "debate_eval.api.chat() can only be used while the evaluator is invoking speak()."
         )
+    return api
 
-    def foward(
-        self,
-        chat_template: ChatTemplate,
-        content: str,
-        role: str = "user",
-    ) -> ChatTemplate:
-        return self.api.foward(chat_template, content=content, role=role)
 
-    def forward(
-        self,
-        chat_template: ChatTemplate,
-        content: str,
-        role: str = "user",
-    ) -> ChatTemplate:
-        return self.api.forward(chat_template, content=content, role=role)
+def chat(messages: ChatTemplate) -> str:
+    """Call the student model with the provided chat template."""
+    return _require_active_api().chat(messages)
 
-    def generate(self, chat_template: ChatTemplate) -> str:
-        return self.api.generate(chat_template)
 
-    def argue(self, chat_history: ChatTemplate) -> str:
-        raise NotImplementedError("Students must implement argue(chat_history).")
+def forward(
+    messages: ChatTemplate,
+    content: str,
+    role: str = "user",
+) -> ChatTemplate:
+    """Return a new message list with one extra message appended."""
+    template = deepcopy(messages)
+    template.append({"role": role, "content": content})
+    return template
 
-    def usage(self) -> dict[str, Any]:
-        return self.api.usage.to_dict()
+
+def generate(messages: ChatTemplate) -> str:
+    """Backward-compatible alias of chat()."""
+    return chat(messages)

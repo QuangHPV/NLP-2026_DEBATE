@@ -1,3 +1,0 @@
-Generating material 1/1...
-Saved: materials/real_material_001.txt | topic=在高等教育数字化转型与平台化发展中，效率优先原则应当优于公平优先原则。
-Finished generating 1 materials into materials.
