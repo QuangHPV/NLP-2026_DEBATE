@@ -28,32 +28,19 @@ Each single returned speech is capped at 7,000 characters by the evaluator. If y
 
 ## Quick Start
 
-1. Clone the repository and enter it.
-
-```bash
-git clone <your-course-repo-url>
-cd NLP@2026
-```
-
-2. Create your own working branch.
-
-```bash
-git checkout -b your-name-agent
-```
-
-3. Copy one of the example agents and start editing it.
+1. Copy one of the example agents and start editing it.
 
 ```bash
 cp students/example_attack.py students/your_agent.py
 ```
 
-4. Validate your file.
+2. Validate your file.
 
 ```bash
 python -m debate_eval.cli --affirmative-file students/your_agent.py --negative-file students/example_balanced.py --validate-only
 ```
 
-5. Run a real test match.
+3. Run a real test match.
 
 ```bash
 python -m debate_eval.cli --affirmative-file students/your_agent.py --negative-file students/example_balanced.py --material real_material_001.txt --rounds 5
@@ -70,7 +57,6 @@ NLP@2026/
 │   └── loader.py       # Student file loading and validation
 ├── materials/          # Debate materials used for evaluation
 ├── students/           # Your agent file lives here
-├── gen_materials.py    # Optional script to generate more materials
 ├── utils.py            # Actual model/API calls
 └── README.md
 ```
@@ -82,10 +68,6 @@ You are expected to implement your logic inside `speak(material, history, side)`
 The student-facing helper functions are intentionally minimal:
 
 - `debate_eval.api.chat(messages) -> str`
-- `debate_eval.api.forward(messages, content, role="user") -> list[dict[str, str]]`
-- `debate_eval.api.generate(messages) -> str`
-
-Right now `generate(messages)` is just an alias for `chat(messages)`, but it is kept for compatibility.
 
 ### Minimal Example
 
@@ -130,7 +112,7 @@ This is a good fit if you want your agent to behave like a small reasoning syste
 Example skeleton:
 
 ```python
-from debate_eval.api import chat, forward
+from debate_eval.api import chat
 
 
 def speak(material, history, side):
@@ -144,13 +126,21 @@ def speak(material, history, side):
             "content": f"You are an English debater on the {side} side.",
         }
     ]
-    base = forward(base, f"Motion: {material.topic}")
-    base = forward(base, f"Material: {material.content}")
-    base = forward(base, f"Transcript:\n{transcript}")
+    base.append({"role": "user", "content": f"Motion: {material.topic}"})
+    base.append({"role": "user", "content": f"Material: {material.content}"})
+    base.append({"role": "user", "content": f"Transcript:\n{transcript}"})
 
-    plan = chat(forward(base, "List the two highest-priority points I should make next."))
-    final_messages = forward(base, f"Here is my planning note: {plan}")
-    final_messages = forward(final_messages, "Now write the actual speech in English.")
+    planning_messages = list(base)
+    planning_messages.append(
+        {"role": "user", "content": "List the two highest-priority points I should make next."}
+    )
+    plan = chat(planning_messages)
+
+    final_messages = list(base)
+    final_messages.append({"role": "user", "content": f"Here is my planning note: {plan}"})
+    final_messages.append(
+        {"role": "user", "content": "Now write the actual speech in English."}
+    )
     return chat(final_messages)
 ```
 

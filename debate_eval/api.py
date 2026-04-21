@@ -94,19 +94,3 @@ def _require_active_api() -> StudentAPI:
 def chat(messages: ChatTemplate) -> str:
     """Call the student model with the provided chat template."""
     return _require_active_api().chat(messages)
-
-
-def forward(
-    messages: ChatTemplate,
-    content: str,
-    role: str = "user",
-) -> ChatTemplate:
-    """Return a new message list with one extra message appended."""
-    template = deepcopy(messages)
-    template.append({"role": role, "content": content})
-    return template
-
-
-def generate(messages: ChatTemplate) -> str:
-    """Backward-compatible alias of chat()."""
-    return chat(messages)

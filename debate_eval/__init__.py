@@ -7,8 +7,6 @@ from .api import (
     StudentAPI,
     UsageStats,
     chat,
-    forward,
-    generate,
 )
 from .engine import DebateMatch, DebateMaterial, DebateTurn, judger
 from .loader import AgentLoadResult, discover_student_agents, load_student_agent
@@ -25,8 +23,6 @@ __all__ = [
     "UsageStats",
     "chat",
     "discover_student_agents",
-    "forward",
-    "generate",
     "judger",
     "load_student_agent",
 ]
