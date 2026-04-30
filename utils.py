@@ -3,14 +3,17 @@ from __future__ import annotations
 from openai import OpenAI
 
 
+API_URL = "https://llmapi.paratera.com"
+BASE_URL = f"{API_URL}/v1/"
+
 client = OpenAI(
-    api_key="REDACTED_API_KEY",
-    base_url="https://yeysai.com/v1",
+    api_key="sk-dCZnQbhuxRELg8bvRyeQOw",
+    base_url=BASE_URL,
 )
 
-student_model = "gpt-4o"
-judger_model = "gemini-3.1-pro-preview"
-material_model = "gemini-3.1-pro-preview"
+student_model = "DeepSeek-V4-Flash"
+judger_model = "DeepSeek-V4-Pro"
+material_model = "DeepSeek-V4-Pro"
 
 
 def chat(messages: list[dict[str, str]], model: str) -> dict:
@@ -36,8 +39,17 @@ def chat_text(messages: list[dict[str, str]], model: str) -> str:
     return extract_text(response)
 
 
+def chat_text_with_usage(messages: list[dict[str, str]], model: str) -> tuple[str, dict]:
+    response = chat(messages=messages, model=model)
+    return extract_text(response), response.get("usage") or {}
+
+
 def student_chat(messages: list[dict[str, str]]) -> str:
     return chat_text(messages=messages, model=student_model)
+
+
+def student_chat_with_usage(messages: list[dict[str, str]]) -> tuple[str, dict]:
+    return chat_text_with_usage(messages=messages, model=student_model)
 
 
 def judge_chat(messages: list[dict[str, str]]) -> str:

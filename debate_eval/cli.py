@@ -5,7 +5,14 @@ import json
 from pathlib import Path
 import random
 
-from .engine import DebateMatch, load_materials, round_robin_pairs
+from .engine import (
+    DEFAULT_JUDGE_VOTES,
+    DEFAULT_TURN_TIME_LIMIT_SECONDS,
+    DEFAULT_TURN_TOKEN_LIMIT,
+    DebateMatch,
+    load_materials,
+    round_robin_pairs,
+)
 from .loader import AgentLoadResult, discover_student_agents, load_student_agent
 
 
@@ -29,6 +36,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=5,
         help="Number of debate rounds per side; default is 5 rounds (10 total speeches)",
+    )
+    parser.add_argument(
+        "--judge-votes",
+        type=int,
+        default=DEFAULT_JUDGE_VOTES,
+        help="Number of independent judge votes to aggregate; default is 3.",
+    )
+    parser.add_argument(
+        "--turn-token-limit",
+        type=int,
+        default=DEFAULT_TURN_TOKEN_LIMIT,
+        help="Per-turn token budget for each student agent; default is 10000000.",
+    )
+    parser.add_argument(
+        "--turn-time-limit",
+        type=float,
+        default=DEFAULT_TURN_TIME_LIMIT_SECONDS,
+        help="Per-turn time limit in seconds; default is 300. Use 0 to disable.",
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed for judger")
     parser.add_argument(
@@ -130,14 +155,20 @@ def main() -> int:
                 negative_speak=agent_b.speak_function,
                 material=material,
                 rounds=args.rounds,
+                judge_votes=args.judge_votes,
+                turn_token_limit=args.turn_token_limit if args.turn_token_limit > 0 else None,
+                turn_time_limit=args.turn_time_limit if args.turn_time_limit > 0 else None,
                 seed=args.seed,
             )
             result = match.run(emit=lambda line: print(line, flush=True))
             print(
                 f"Summary: {agent_a.name} vs {agent_b.name} | "
                 f"winner={result['winner']} | "
-                f"judge_raw={json.dumps(result['judge_raw'], ensure_ascii=False)} | "
-                f"judge_fallback={result['judge_fallback']} | "
+                f"judge_votes={json.dumps(result['judge_votes'], ensure_ascii=False)} | "
+                f"judge_vote_counts={json.dumps(result['judge_vote_counts'], ensure_ascii=False)} | "
+                f"judge_fallback_count={result['judge_fallback_count']} | "
+                f"turn_token_limit={result['turn_token_limit']} | "
+                f"turn_time_limit={result['turn_time_limit']} | "
                 f"usage={json.dumps(result['usage'], ensure_ascii=False)}"
             )
         print("")

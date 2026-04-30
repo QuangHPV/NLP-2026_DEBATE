@@ -1,0 +1,101 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue
+}
+
+\setlist[itemize]{leftmargin=1.4em}
+\setlist[enumerate]{leftmargin=1.6em}
+
+\title{\textbf{Assignment Notice: English Debate Agent}}
+\author{Natural Language Processing, 2026}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Overview}
+
+In this assignment, you will build a Python agent for English-language debate. For each match, the system provides a debate motion and a randomly selected background material of roughly 10,000 tokens. Two agents then debate for five rounds per side, producing ten speeches in total.
+
+Your agent receives the material, debate history, and assigned side, then returns the next speech. Across evaluation matches, agents will play both affirmative and negative. After each debate, an automated judge system decides the winner based on material use, reasoning, rebuttal quality, and consistency.
+
+\section*{Match Format and Limits}
+
+\begin{itemize}
+    \item Each match uses one debate motion and one background material of roughly 10,000 tokens.
+    \item Each agent plays one side in a match: \texttt{affirmative} or \texttt{negative}.
+    \item Each side gives five speeches, so one match contains ten speeches in total.
+    \item Each returned speech is limited to \textbf{7,000 characters}. Longer speeches will be truncated by the evaluator.
+    \item Each call to \texttt{speak(...)} has an API token budget of \textbf{10,000,000 tokens}.
+    \item Each call to \texttt{speak(...)} has a wall-clock time limit of \textbf{300 seconds}.
+    \item If an agent exceeds the token or time limit, it forfeits only the current speech and the match continues.
+    \item The judge system produces \textbf{three} independent votes and decides the winner by majority.
+    \item In the final evaluation, agents will be tested from both sides across different pairwise matches.
+\end{itemize}
+
+\section*{API Access}
+
+Students can claim a free school-provided API key at \url{https://easycompute.cs.tsinghua.edu.cn/login} for development and testing.
+
+\section*{What You Need to Submit}
+
+Each team should submit one Python file implementing the required agent interface:
+
+\begin{verbatim}
+def speak(material, history, side) -> str:
+    ...
+\end{verbatim}
+
+Your file should be placed under the \texttt{students/} directory and must pass the validation command described in the repository README. You may start from the provided example agents and modify them.
+
+At the end of the semester, each team must also submit a PDF report describing the design, architecture, and methods used in its agent system. Detailed report requirements will be released later.
+
+\textbf{Please read the README carefully.} It contains the exact API, validation rules, testing commands, character limits, time limits, and development advice. This notice is only a high-level summary.
+
+\section*{Team Policy}
+
+You may work individually or in a team of up to \textbf{three} students. Each team submits one agent and receives one shared result for this assignment.
+
+\section*{Alternative Project Option}
+
+Students may propose an independent project as a replacement for this assignment. To use this option, the team must submit a short project proposal to the teaching assistants for review. The project can replace this assignment only after the proposal has been approved.
+
+Alternative projects may also be completed individually or in a team of up to \textbf{three} students. The final submission must clearly state each team member's contribution.
+
+\section*{Competition Format}
+
+During the semester, we will maintain a reference leaderboard so that teams can observe how their agents perform against available opponents and baseline agents. This leaderboard is intended to help you debug and improve your agent; it is not necessarily the final grade by itself.
+
+At the end of the semester, submitted agents will compete in pairwise matches. The final ranking will be determined by performance in these head-to-head evaluations, and grades will be assigned from higher rank to lower rank.
+
+\section*{Grade Guarantee}
+
+This assignment is competitive, but it is not all-or-nothing. The teaching assistants will provide an advanced reference agent. Any valid submission that can defeat this advanced TA agent will be guaranteed at least \textbf{90\%} of the assignment score. Higher scores will depend on final tournament performance.
+
+\section*{Submission Method}
+
+We will provide a submission website where teams can update their agents throughout the semester. You may revise and resubmit your agent on the website at any time before the final deadline.
+
+The reference leaderboard will not update immediately after every submission. It will be refreshed on a fixed schedule announced by the teaching team.
+
+\section*{Suggested Workflow}
+
+\begin{enumerate}
+    \item Read the README and inspect the example agents.
+    \item Copy an example agent into your own file under \texttt{students/}.
+    \item Implement a minimal working version of \texttt{speak(...)}.
+    \item Validate your file locally.
+    \item Run test matches against the provided agents.
+    \item Improve your prompting, planning, rebuttal strategy, and use of debate history.
+\end{enumerate}
+
+\end{document}

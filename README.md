@@ -2,7 +2,7 @@
 
 This repository is a starter framework for building and testing Python agents for an English-language debate match. Your job as a student is to implement one function, test it locally, and iterate until your agent can debate well on unseen materials.
 
-The current evaluation setting uses 5 rounds per side, which means 10 total speeches in one match.
+The current evaluation setting uses 5 rounds per side and 3 independent judge votes, which means 10 total speeches and a 3-vote aggregate decision in one match. Each student turn also has a 10,000,000-token budget and a 300-second time limit by default.
 
 ## What You Build
 
@@ -26,6 +26,8 @@ Your function must return the current speech as a string.
 
 Each single returned speech is capped at 7,000 characters by the evaluator. If your function returns more than 7,000 characters, the engine truncates it before storing and judging the turn.
 
+Each call to `speak(...)` is also treated as one timed and budgeted turn. If the agent exceeds the per-turn time limit, the evaluator records that side as forfeiting the current speech and continues the match. If the agent exceeds the per-turn token budget across one or more `chat(...)` calls inside the same turn, that turn is also forfeited.
+
 ## Quick Start
 
 1. Copy one of the example agents and start editing it.
@@ -43,7 +45,19 @@ python -m debate_eval.cli --affirmative-file students/your_agent.py --negative-f
 3. Run a real test match.
 
 ```bash
-python -m debate_eval.cli --affirmative-file students/your_agent.py --negative-file students/example_balanced.py --material real_material_001.txt --rounds 5
+python -m debate_eval.cli --affirmative-file students/your_agent.py --negative-file students/example_balanced.py --material material_001_congestion_pricing.txt --rounds 5
+```
+
+Optional limits can be overridden from the CLI:
+
+```bash
+python -m debate_eval.cli \
+  --affirmative-file students/your_agent.py \
+  --negative-file students/example_balanced.py \
+  --material material_001_congestion_pricing.txt \
+  --rounds 5 \
+  --turn-token-limit 10000000 \
+  --turn-time-limit 300
 ```
 
 ## Repository Layout
@@ -61,6 +75,22 @@ NLP@2026/
 └── README.md
 ```
 
+## Model And API Configuration
+
+The shared LLM configuration lives in `utils.py`.
+
+- Change the API key in the `OpenAI(...)` client setup by editing `api_key`.
+- Change the provider endpoint by editing `API_URL` / `BASE_URL`.
+- Student agents call `debate_eval.api.chat(...)`, which routes to `student_model`.
+- The automated judge uses `judger_model`.
+- Debate material generation helpers, if used, use `material_model`.
+
+The current defaults are:
+
+- Student model: `DeepSeek-V4-Flash`
+- Judge model: `DeepSeek-V4-Pro`
+- Material model: `DeepSeek-V4-Pro`
+
 ## Student API
 
 You are expected to implement your logic inside `speak(material, history, side)`.
@@ -68,6 +98,12 @@ You are expected to implement your logic inside `speak(material, history, side)`
 The student-facing helper functions are intentionally minimal:
 
 - `debate_eval.api.chat(messages) -> str`
+
+Important prompt-format note:
+
+- `messages[i]["role"]` is only for the model API's instruction hierarchy, not for debate identity.
+- Do not encode affirmative/negative speeches as alternating chat roles or as per-turn JSON dialogue.
+- Keep the debate itself inside `content` as formatted plain text transcript, and use `role` only for normal `system` / `user` prompting.
 
 ### Minimal Example
 
@@ -120,26 +156,38 @@ def speak(material, history, side):
         f"Round {turn.round_index} {turn.side}: {turn.content}" for turn in history
     ) or "No previous turns yet."
 
-    base = [
-        {
-            "role": "system",
-            "content": f"You are an English debater on the {side} side.",
-        }
-    ]
-    base.append({"role": "user", "content": f"Motion: {material.topic}"})
-    base.append({"role": "user", "content": f"Material: {material.content}"})
-    base.append({"role": "user", "content": f"Transcript:\n{transcript}"})
+    base = [{
+        "role": "system",
+        "content": f"You are an English debater on the {side} side.",
+    }]
+    shared_context = (
+        f"Motion: {material.topic}\n\n"
+        f"Material:\n{material.content}\n\n"
+        f"Transcript:\n{transcript}"
+    )
 
     planning_messages = list(base)
     planning_messages.append(
-        {"role": "user", "content": "List the two highest-priority points I should make next."}
+        {
+            "role": "user",
+            "content": (
+                f"{shared_context}\n\n"
+                "List the two highest-priority points I should make next."
+            ),
+        }
     )
     plan = chat(planning_messages)
 
     final_messages = list(base)
-    final_messages.append({"role": "user", "content": f"Here is my planning note: {plan}"})
     final_messages.append(
-        {"role": "user", "content": "Now write the actual speech in English."}
+        {
+            "role": "user",
+            "content": (
+                f"{shared_context}\n\n"
+                f"Here is my planning note: {plan}\n\n"
+                "Now write the actual speech in English."
+            ),
+        }
     )
     return chat(final_messages)
 ```
@@ -151,6 +199,7 @@ def speak(material, history, side):
 - Keep the side stable. Your agent should never switch from affirmative to negative or vice versa mid-debate.
 - Prefer argument quality over verbosity. The judge prompt rewards relevance, logic, rebuttal quality, and consistency.
 - Keep each speech within 7,000 characters. Longer outputs will be truncated by the evaluator.
+- Keep each turn within the token and time limits. The default per-turn budget is 10,000,000 tokens, and the default per-turn time limit is 300 seconds.
 - Handle the first turn gracefully. `history` may be empty.
 - Return plain text. Do not return JSON unless your own pipeline needs it internally and you convert it back before returning.
 
@@ -188,11 +237,25 @@ python -m debate_eval.cli \
 python -m debate_eval.cli \
   --affirmative-file students/your_agent.py \
   --negative-file students/example_balanced.py \
-  --material real_material_001.txt \
+  --material material_001_congestion_pricing.txt \
   --rounds 5
 ```
 
 The default setting is also 5 rounds per side, so if you omit `--rounds`, one match will still contain 10 total speeches.
+
+### Adjust per-turn limits
+
+```bash
+python -m debate_eval.cli \
+  --affirmative-file students/your_agent.py \
+  --negative-file students/example_balanced.py \
+  --material material_001_congestion_pricing.txt \
+  --rounds 5 \
+  --turn-token-limit 10000000 \
+  --turn-time-limit 300
+```
+
+`--turn-token-limit` controls the maximum tokens an agent can spend during one call to `speak(...)`, including all `chat(...)` calls made inside that turn. `--turn-time-limit` controls the maximum wall-clock seconds allowed for one call to `speak(...)`. Passing `0` disables the corresponding limit.
 
 ### Fix randomness for reproducibility
 
@@ -251,11 +314,16 @@ The judge is instructed to output only:
 - `affirmative`
 - `negative`
 
+The evaluator now asks the judge model for 3 independent votes and aggregates them by majority. If a judge response is unparsable, that vote falls back to a seeded random side.
+
 ## Evaluation Constraints
 
 - The standard evaluation setup uses 5 rounds per side.
 - That means one match contains 10 total speeches.
 - Each individual speech is limited to 7,000 characters after the engine receives it.
+- Each individual turn has a default 10,000,000-token budget. Token usage is read from the model API response when available; otherwise the evaluator falls back to a conservative character-based estimate.
+- Each individual turn has a default 300-second wall-clock time limit.
+- If a turn exceeds the token or time limit, that side forfeits only the current turn and the match continues.
 
 ## Suggested Workflow for a Student
 
@@ -281,7 +349,7 @@ If your course expects pull requests, push your branch and open one according to
 
 ## Important Notes
 
-- The actual model/API configuration lives in `utils.py`.
+- The actual model/API configuration lives in `utils.py`; see "Model And API Configuration" above.
 - If you want to change debate rules, judging behavior, or match flow, look in `debate_eval/engine.py`.
 - If you want to change how student files are loaded or validated, look in `debate_eval/loader.py`.
 - If you only want to build your own agent, you usually only need to edit files under `students/`.
