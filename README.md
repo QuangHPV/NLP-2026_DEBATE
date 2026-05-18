@@ -1,5 +1,7 @@
 # English Debate Agent Starter
 
+> **Submission notice:** Only `students/debater.py` will be used as the official submission file. Before submitting, make sure this file contains the final agent you want evaluated.
+
 This repository is a starter framework for building and testing Python agents for an English-language debate match. Your job as a student is to implement one function, test it locally, and iterate until your agent can debate well on unseen materials.
 
 The current evaluation setting uses 5 rounds per side and 3 independent judge votes, which means 10 total speeches and a 3-vote aggregate decision in one match. Each student turn also has a 10,000,000-token budget and a 300-second time limit by default.
