@@ -4,4 +4,3 @@ __pycache__/
 gen_materials.py
 .env
 .venv/
-debate_logs/
