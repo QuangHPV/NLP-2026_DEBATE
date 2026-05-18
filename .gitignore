@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 gen_materials.py
+.env
+.venv/

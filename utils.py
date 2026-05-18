@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 API_URL = "https://llmapi.paratera.com"
 BASE_URL = f"{API_URL}/v1/"
 
 client = OpenAI(
-    api_key="sk-dCZnQbhuxRELg8bvRyeQOw",
+    api_key=os.environ["OPENAI_API_KEY"],
     base_url=BASE_URL,
 )
 
