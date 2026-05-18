@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
+import os
 from pathlib import Path
 import random
 
@@ -171,9 +173,22 @@ def main() -> int:
                 f"turn_time_limit={result['turn_time_limit']} | "
                 f"usage={json.dumps(result['usage'], ensure_ascii=False)}"
             )
+            # log stat_summary to a file with timestamp and agent names
+            stat_summary = {
+                "Affirmative Name": agent_a.name,
+                "Negative Name": agent_b.name
+            }
+            stat_summary.update(result)
+            log_dir = Path("debate_logs")
+            log_dir.mkdir(exist_ok=True)
+            log_filename = f"debate_result_{agent_a.name}_vs_{agent_b.name}_{material.name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+            log_filepath = os.path.join(log_dir, log_filename)
+            with open(log_filepath, "w") as f:
+                json.dump(stat_summary, f, indent=2)
+                print(f"Saved debate result to {log_filepath}")
         print("")
 
-    return 0
+    return stat_summary
 
 
 if __name__ == "__main__":
