@@ -48,7 +48,7 @@ def speak(material, history, side):
         fallacy_analysis = chat(analysis_messages)
 
     # -------------------------------------------------------------------------
-    # STEP 2: Drafting the Final Speech
+    # STEP 2: Drafting the Initial Speech
     # -------------------------------------------------------------------------
     
     # Adjust instructions based on whether we are opening, continuing, or closing
@@ -65,7 +65,7 @@ def speak(material, history, side):
             "content": (
                 f"You are a highly skilled English debater representing the {side} side. "
                 "Your tone MUST be academic, measured, and diplomatic. Rely strictly on logic and the provided material. "
-                "Do not use highly aggressive, emotional, or combative language. Maintain professional decorum while systematically dismantling the opponent's arguments."
+                "Do not use highly aggressive, emotional, or combative language. Maintain professional decorum while systematically dismantling the opponent's arguments. "
                 "Never dilute or apologize for the core motion. If the motion is an absolute mandate, defend the mandate aggressively. Do not add hypothetical conditions to make the policy sound easier."
             ),
         },
@@ -83,5 +83,35 @@ def speak(material, history, side):
         },
     ]
 
-    # Call the LLM one final time to draft the speech to return to the engine
-    return chat(draft_messages)
+    # Generate the draft, but do NOT return it yet
+    draft_speech = chat(draft_messages)
+
+    # -------------------------------------------------------------------------
+    # STEP 3: The Validation & Refinement Pass 
+    # -------------------------------------------------------------------------
+    validation_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an elite debate coach and rigorous copy editor. Your job is to review a drafted debate speech, "
+                "fix any grammatical errors, elevate the prose, and ensure strict adherence to strategic constraints."
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Here is the drafted speech for our {side} side in Round {current_round}:\n\n"
+                f"<draft>\n{draft_speech}\n</draft>\n\n"
+                "Please review and refine this speech based on these CRITICAL rules:\n"
+                "1. Fix any broken grammar, typos, or degraded formatting.\n"
+                "2. Ensure the tone is flawlessly academic and diplomatic.\n"
+                "3. Ensure the speaker defends the absolute mandate of the motion and does not concede ground with weak hypotheticals.\n"
+                "4. Strip out any meta-text like 'Here is the improved speech:' or 'Round 3:'.\n"
+                "5. Ensure the final length is comfortably under 800 words.\n\n"
+                "Output ONLY the final, polished words that will be spoken to the judge. Nothing else."
+            )
+        }
+    ]
+
+    # Call the LLM one final time to polish the speech and return the improved version
+    return chat(validation_messages)

@@ -96,10 +96,7 @@ def _load_requested_agents(args: argparse.Namespace) -> list[AgentLoadResult]:
     ]
 
 
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-
+def run_cli(args: argparse.Namespace) -> int:
     if args.seed is not None:
         random.seed(args.seed)
 
@@ -175,8 +172,8 @@ def main() -> int:
             )
             # log stat_summary to a file with timestamp and agent names
             stat_summary = {
-                "Affirmative Name": agent_a.name,
-                "Negative Name": agent_b.name
+                "affirmative_name": agent_a.name,
+                "negative_name": agent_b.name
             }
             stat_summary.update(result)
             log_dir = Path("debate_logs")
@@ -189,6 +186,12 @@ def main() -> int:
         print("")
 
     return stat_summary
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return run_cli(args)
 
 
 if __name__ == "__main__":
