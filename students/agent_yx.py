@@ -2,7 +2,6 @@ from debate_eval.api import chat
 
 def speak(material, history, side):
     # 1. Calculate where we are in the debate to prevent the looping bug
-    # Since each round has 2 speeches, integer division by 2 gives us the completed rounds
     current_round = (len(history) // 2) + 1
     opponent_side = "negative" if side == "affirmative" else "affirmative"
 
@@ -21,12 +20,9 @@ def speak(material, history, side):
     # STEP 1: The Logical Fallacy Hunt (Hidden from the Judge)
     # -------------------------------------------------------------------------
     if len(history) == 0:
-        # If we are the Affirmative speaking first, there is no opponent to analyze yet.
         fallacy_analysis = "This is the opening speech. We must establish the core logical framework of our case."
     else:
-        # Extract exactly what the opponent just said
         last_opponent_speech = history[-1].content
-        
         analysis_messages = [
             {
                 "role": "system",
@@ -44,14 +40,34 @@ def speak(material, history, side):
                 ),
             },
         ]
-        # Call the LLM to generate the analysis (this uses tokens but is not seen by the judge)
         fallacy_analysis = chat(analysis_messages)
+
+    # -------------------------------------------------------------------------
+    # STEP 1.5: The Researcher (Evidence Extraction)
+    # -------------------------------------------------------------------------
+    research_messages = [
+        {
+            "role": "system",
+            "content": "You are an elite debate researcher. Your job is to mine the background material for hard evidence."
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Motion: {material.topic}\n\n"
+                f"Material:\n{material.content}\n\n"
+                f"--- OUR OPPONENT'S WEAKNESSES ---\n{fallacy_analysis}\n\n"
+                f"Based on the weaknesses identified above, scan the Material and extract 2 or 3 SPECIFIC facts, statistics, or direct quotes that we can use to destroy the opponent's logic and support our {side} case in Round {current_round}. "
+                "Output only a bulleted list of the exact evidence we should use."
+            )
+        }
+    ]
+    
+    # Call the LLM to extract hard evidence (Hidden from the judge)
+    research_notes = chat(research_messages)
 
     # -------------------------------------------------------------------------
     # STEP 2: Drafting the Initial Speech
     # -------------------------------------------------------------------------
-    
-    # Adjust instructions based on whether we are opening, continuing, or closing
     if current_round == 1:
         pacing_instruction = "This is your opening speech. Establish our foundational arguments clearly and preemptively inoculate against obvious counterarguments."
     elif current_round == 5:
@@ -66,7 +82,8 @@ def speak(material, history, side):
                 f"You are a highly skilled English debater representing the {side} side. "
                 "Your tone MUST be academic, measured, and diplomatic. Rely strictly on logic and the provided material. "
                 "Do not use highly aggressive, emotional, or combative language. Maintain professional decorum while systematically dismantling the opponent's arguments. "
-                "Never dilute or apologize for the core motion. If the motion is an absolute mandate, defend the mandate aggressively. Do not add hypothetical conditions to make the policy sound easier."
+                "Never dilute or apologize for the core motion. If the motion is an absolute mandate, defend the mandate aggressively. "
+                "CRITICAL STRATEGY: When attacking the opponent's logic, NEVER explicitly use academic fallacy terms like 'strawman', 'false dichotomy', 'hasty generalization', or 'ad hominem'. Explain *why* their logic is broken naturally and conversationally."
             ),
         },
         {
@@ -74,20 +91,21 @@ def speak(material, history, side):
             "content": (
                 f"{shared_context}\n\n"
                 f"--- OUR STRATEGIC ANALYSIS OF THE OPPONENT ---\n{fallacy_analysis}\n\n"
+                f"--- HARD EVIDENCE TO CITE ---\n{research_notes}\n\n"
                 f"--- INSTRUCTIONS FOR THIS SPEECH ---\n"
                 f"{pacing_instruction}\n\n"
                 "Write the full speech in English. \n"
-                "IMPORTANT: DO NOT output any meta-text, round numbers, or headers (e.g., do not start with 'Speech 3:' or 'Round 3:'). "
-                "Write a highly polished, grammatically perfect speech. Limit your response to exactly 800 words to ensure maximum impact and clarity."
+                "IMPORTANT: DO NOT output any meta-text, round numbers, or headers. "
+                "Write a highly polished, grammatically perfect speech. Limit your response to exactly 800 words to ensure maximum impact and clarity. "
+                "You MUST seamlessly weave the 'Hard Evidence' provided above into your arguments."
             ),
-        },
+        }
     ]
 
-    # Generate the draft, but do NOT return it yet
     draft_speech = chat(draft_messages)
 
     # -------------------------------------------------------------------------
-    # STEP 3: The Validation & Refinement Pass 
+    # STEP 3: The Validation & Refinement Pass (New Critic Step)
     # -------------------------------------------------------------------------
     validation_messages = [
         {
@@ -107,11 +125,11 @@ def speak(material, history, side):
                 "2. Ensure the tone is flawlessly academic and diplomatic.\n"
                 "3. Ensure the speaker defends the absolute mandate of the motion and does not concede ground with weak hypotheticals.\n"
                 "4. Strip out any meta-text like 'Here is the improved speech:' or 'Round 3:'.\n"
-                "5. Ensure the final length is comfortably under 800 words.\n\n"
+                "5. Ensure the final length is comfortably under 800 words.\n"
+                "6. JARGON CHECK: If the draft uses explicit academic fallacy terms (e.g., 'strawman', 'false dichotomy', 'hasty generalization', 'ad hominem', 'slippery slope'), you MUST rewrite those sentences to explain the logical flaw naturally without using the jargon. Make it sound conversational.\n\n"
                 "Output ONLY the final, polished words that will be spoken to the judge. Nothing else."
             )
         }
     ]
 
-    # Call the LLM one final time to polish the speech and return the improved version
     return chat(validation_messages)
