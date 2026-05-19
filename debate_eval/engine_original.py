@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import itertools
 import json
-import time
 from pathlib import Path
 import random
 import re
@@ -206,7 +205,6 @@ class DebateMatch:
             api=StudentAPI(agent_name=negative_name, turn_token_limit=turn_token_limit),
         )
         self.transcript: list[DebateTurn] = []
-        self.turn_times: dict[str, list[float]] = {"affirmative": [], "negative": []}
 
     def _readonly_material(self) -> ReadonlyDebateMaterial:
         return ReadonlyDebateMaterial(
@@ -276,7 +274,6 @@ class DebateMatch:
         round_index: int,
         emit: Callable[[str], None] | None = None,
     ) -> None:
-        start_time = time.perf_counter()
         try:
             with _turn_time_limit(self.turn_time_limit), agent.api.activate():
                 content = agent.speak(
@@ -299,8 +296,6 @@ class DebateMatch:
             content = "We have no further additions this round, but we maintain our position."
         if len(content) > MAX_SPEECH_CHARS:
             content = content[:MAX_SPEECH_CHARS].rstrip()
-        elapsed = time.perf_counter() - start_time
-        self.turn_times[agent.side].append(elapsed)
         self.transcript.append(
             DebateTurn(
                 round_index=round_index,
@@ -351,14 +346,8 @@ class DebateMatch:
             "rounds": self.rounds,
             "transcript": [turn.__dict__ for turn in self.transcript],
             "usage": {
-                "affirmative": {
-                    **self.affirmative.api.usage.to_dict(),
-                    "time taken": self.turn_times["affirmative"],
-                },
-                "negative": {
-                    **self.negative.api.usage.to_dict(),
-                    "time taken": self.turn_times["negative"],
-                },
+                "affirmative": self.affirmative.api.usage.to_dict(),
+                "negative": self.negative.api.usage.to_dict(),
             },
         }
 

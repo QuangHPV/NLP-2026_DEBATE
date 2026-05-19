@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import json
-import os
 from pathlib import Path
 import random
 
@@ -96,7 +94,10 @@ def _load_requested_agents(args: argparse.Namespace) -> list[AgentLoadResult]:
     ]
 
 
-def run_cli(args: argparse.Namespace) -> int:
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
     if args.seed is not None:
         random.seed(args.seed)
 
@@ -170,32 +171,9 @@ def run_cli(args: argparse.Namespace) -> int:
                 f"turn_time_limit={result['turn_time_limit']} | "
                 f"usage={json.dumps(result['usage'], ensure_ascii=False)}"
             )
-            # log stat_summary to a file with timestamp and agent names
-            stat_summary = {
-                "affirmative_name": agent_a.name,
-                "negative_name": agent_b.name
-            }
-            stat_summary.update(result)
-            usage = stat_summary["usage"]
-            usage["affirmative"]["transcripts length"] = [len(stat_summary["transcript"][i]["content"]) for i in range(0, len(stat_summary["transcript"]), 2)]
-            usage["negative"]["transcripts length"] = [len(stat_summary["transcript"][i]["content"]) for i in range(1, len(stat_summary["transcript"]), 2)]
-            stat_summary["usage"] = usage
-            log_dir = Path("debate_logs")
-            log_dir.mkdir(exist_ok=True)
-            log_filename = f"debate_result_{agent_a.name}_vs_{agent_b.name}_{material.name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-            log_filepath = os.path.join(log_dir, log_filename)
-            with open(log_filepath, "w") as f:
-                json.dump(stat_summary, f, indent=2)
-                print(f"Saved debate result to {log_filepath}")
         print("")
 
-    return stat_summary
-
-
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-    return run_cli(args)
+    return 0
 
 
 if __name__ == "__main__":
