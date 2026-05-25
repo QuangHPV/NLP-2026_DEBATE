@@ -20,12 +20,12 @@ def _get_material_map(material):
         f"Motion: {material.topic}\n\n"
         f"Material:\n{material.content}\n\n"
         "Extract the following into a concise battle plan:\n"
-        "1. AFFIRMATIVE AMMO: Extract the 3 strongest factual quotes supporting the motion. Tag them as [A1], [A2], [A3].\n"
+        "1. AFFIRMATIVE AMMO: Extract the 4 strongest factual quotes supporting the motion. Tag them as [A1], [A2], [A3], [A4].\n"
         "2. NEGATIVE AMMO: Extract the 3 strongest factual quotes opposing the motion. Tag them as [N1], [N2], [N3].\n"
         "3. MITIGATIONS/SAFEGUARDS: What specific solutions or safety valves does the material offer to address the Negative's harms? Tag them as [M1], [M2].\n"
         "4. WEIGHING METRIC: Identify the core tension (e.g., Short-term harm vs. Long-term systemic gain, Equity vs. Efficiency).\n"
         "5. THE HARDEST ATTACKS: Identify the 2 most devastating attacks against the Affirmative found in the text, AND extract the text's own counter-arguments to each. Tag them as [HARD1] and [HARD2].\n"
-        "6. AFFIRMATIVE'S COUNTER-ATTACKS: Identify the 2 strongest rebuttals the Affirmative can make against the Negative's position, based on the material. Tag them as [COUNTER1] and [COUNTER2]."
+        "6. AFFIRMATIVE'S COUNTER-ATTACKS: Identify the 3 strongest rebuttals the Affirmative can make against the Negative's position, based on the material. Tag them as [COUNTER1], [COUNTER2], [COUNTER3]."
     )
 
     try:
@@ -37,9 +37,7 @@ def _get_material_map(material):
 
 
 def _get_past_arguments(history, side):
-    """
-    Extracts paragraph-level topic map, structural fingerprint, and closing fingerprint.
-    """
+    """Extracts paragraph-level topic map, structural fingerprint, and closing fingerprint."""
     past_args = []
     structural_frames = []
     past_closings = []
@@ -186,7 +184,7 @@ def _get_round_directive(current_round, side):
         directive = "ROUND 1: OPENING. Set a measured, authoritative tone. Introduce your core case using the material. "
         if side == "affirmative":
             directive += (
-                "Build 2-3 contentions grounded in [A1]-[A3] and [COUNTER1]/[COUNTER2]. "
+                "Build 2-3 contentions grounded in [A1]-[A4] and [COUNTER1]/[COUNTER2]/[COUNTER3]. "
                 "Proactively address the [HARD1] and [HARD2] attacks naturally before the opponent can use them. "
                 "Acknowledge the material's caveats, then show why your mandate overcomes them. End with forward momentum."
             )
@@ -200,10 +198,10 @@ def _get_round_directive(current_round, side):
         return directive
     elif current_round == 5:
         return (
-            "ROUND 5: CLOSING. STRICT LENGTH LIMIT: 500-600 words. Do not introduce new arguments. "
-            "Structure: (1) Name the 2 most critical voting issues. "
-            "(2) For each: state the clash in one sentence, cite one piece of evidence, explain why we win in one sentence. "
-            "(3) One sentence of meta-weighing (e.g., certainty of harm vs. speculation of benefit). "
+            "ROUND 5: CLOSING. Target 600-800 words. Do not introduce new arguments. "
+            "Structure: (1) Name the 2-3 most critical voting issues. "
+            "(2) For each: state the clash, cite evidence, explain why we win — develop each for 3-4 sentences. "
+            "(3) One paragraph of meta-weighing (certainty of harm vs. speculation of benefit; magnitude vs. probability). "
             "(4) End with a single, powerful ballot directive. Use a COMPLETELY DIFFERENT closing phrase than any previous round."
         )
     elif side == "affirmative":
@@ -211,7 +209,7 @@ def _get_round_directive(current_round, side):
             f"ROUND {current_round}: MIDDLE GAME (AFFIRMATIVE). Structure your speech in this order:\n"
             "1. NEW CONSTRUCTIVE (30%): Introduce ONE new angle, piece of evidence, or expansion of your case that "
             "the opponent has not addressed. This keeps offensive pressure and prevents them from claiming you are "
-            "only playing defense. Use [A1]-[A3], [COUNTER1], [COUNTER2], or a new angle from the material.\n"
+            "only playing defense. Use [A1]-[A4], [COUNTER1], [COUNTER2], [COUNTER3], or a new angle from the material.\n"
             "2. DIRECT CLASH (50%): Name their specific arguments from their last speech and answer them directly. "
             "Use 'Even-If' subsumption. Develop each clash for 2-3 sentences before moving on.\n"
             "3. COUNTER-WEIGH (20%): Pivot to why the balance of evidence still favors your side overall."
@@ -269,7 +267,7 @@ def speak(material, history, side):
         )
     elif current_round == 5:
         prep_instructions = (
-            "1. Identify 2 Voting Issues: [Select the 2 strongest unresolved clashes]\n"
+            "1. Identify 2-3 Voting Issues: [Select the strongest unresolved clashes]\n"
             "2. Plan Meta-Weighing: [Certainty vs. speculation? Magnitude vs. probability?]\n"
             "3. Crystallization Check: [Cut everything that isn't a voting issue or evidence cite]\n"
             "4. Closing Phrase: [Check past closings below — draft something COMPLETELY different]"
@@ -290,7 +288,7 @@ def speak(material, history, side):
         )
 
     target_length = (
-        "500-600 words of highly concentrated crystallization."
+        "600-800 words of concentrated crystallization."
         if current_round == 5
         else "700-900 words of flowing, persuasive prose."
     )
@@ -307,15 +305,20 @@ def speak(material, history, side):
         "'does not exist' or is 'ungrounded' based on the tag label alone. If you want to cite the same quote "
         "they referenced, use YOUR OWN corresponding tag. Only challenge a factual claim if the SUBSTANCE of what "
         "they said is genuinely absent from the material — not because their tag format differs from yours.\n\n"
-        "2. DIRECT CLASH — Name their specific arguments and answer them directly. If they claim you 'dropped' "
+        "2. NO FABRICATION — You may ONLY cite facts, statistics, examples, city names, studies, or outcomes "
+        "that are EXPLICITLY present in the Material Evidence Bank below. If the material does not name a "
+        "specific city, study, or statistic, you MUST NOT invent one. Instead, argue from the material's "
+        "general principles, causal mechanisms, and conditional claims. Fabricating specific evidence is the "
+        "fastest way to lose a judge's vote — opponents will seize on it.\n\n"
+        "3. DIRECT CLASH — Name their specific arguments and answer them directly. If they claim you 'dropped' "
         "an argument, check the transcript. If you addressed it even partially, say so and explain why your "
         "answer was sufficient. Never let a false 'dropped' claim stand uncontested.\n\n"
-        "3. NO EMPTY REPETITION — Evolve your arguments every round. Do not repeat past points, openers, or closings. "
-        "Vary your vocabulary: instead of saying 'the status quo' every time, alternate with 'the current arrangement,' "
-        "'doing nothing,' 'the existing approach,' 'inaction,' 'the default position,' etc.\n\n"
-        "4. CLOSING VARIATION — Use a different final sentence every round. Check your past closings and avoid any "
+        "4. NO EMPTY REPETITION — Evolve your arguments every round. Do not repeat past points, openers, or closings. "
+        "Vary your vocabulary across rounds: instead of repeating 'the status quo' every time, alternate with "
+        "'the current arrangement,' 'doing nothing,' 'the existing approach,' 'inaction,' 'the default position,' etc.\n\n"
+        "5. CLOSING VARIATION — Use a different final sentence every round. Check your past closings and avoid any "
         "similarity in wording or imagery.\n\n"
-        "5. MEASURED TONE — Speak conversationally and persuasively. No aggressive jargon ('destroyed', 'fallacy', "
+        "6. MEASURED TONE — Speak conversationally and persuasively. No aggressive jargon ('destroyed', 'fallacy', "
         "'strawman'). No bold text, no bullet points, no markdown headers in the speech itself.\n\n"
         "OUTPUT FORMAT:\n"
         "<prep>\n"
