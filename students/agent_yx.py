@@ -139,13 +139,21 @@ def _get_toolkit(side):
             "- The Alternative Kill: If they propose a softer alternative (e.g., voluntary measures, alternative funding, "
             "incremental steps), expose the mechanism gap: explicitly state why their alternative lacks the unique structural "
             "mechanism required to actually solve the root cause. Without our mandate, the core problem remains untouched.\n"
+            "- The Mechanism Argument: If they propose payroll taxes, value capture, parking reform, or car-free days, "
+            "explain that each of those addresses only ONE dimension of the problem (revenue, OR pricing, OR behavior) "
+            "while our mandate addresses ALL THREE simultaneously: it prices the externality, generates dedicated revenue, "
+            "AND shifts behavior at the point of decision. IMPORTANT: Do NOT always call this a 'triple mechanism' — "
+            "describe the same concept using DIFFERENT LANGUAGE each round to avoid sounding repetitive.\n"
             "- The Catch-22: If they argue 'wait until conditions are ready' or 'build capacity first', point out that "
             "the mandate is exactly what forces the system to adapt and generates the resources/political will to build "
             "those conditions. Delay guarantees paralysis.\n"
             "- Mitigations: Acknowledge valid transition or equity concerns reasonably, then instantly neutralize them "
             "using your extracted Mitigations [M1]/[M2]. Then pivot: even with the concern, the current situation is worse.\n"
             "- Escalate Pressure: Each round, press harder on the hidden costs of doing nothing. Frame their defense as "
-            "defending a system that already harms the people they claim to protect."
+            "defending a system that already harms the people they claim to protect.\n"
+            "- Anti-Fabrication Defense: If the opponent cites specific city names, study outcomes, or statistics that "
+            "are not in the material, you can point out that those claims go beyond the provided evidence. However, do "
+            "not make this a major argument — one brief mention is enough."
         )
     else:
         return (
@@ -184,9 +192,13 @@ def _get_round_directive(current_round, side):
         directive = "ROUND 1: OPENING. Set a measured, authoritative tone. Introduce your core case using the material. "
         if side == "affirmative":
             directive += (
-                "Build 2-3 contentions grounded in [A1]-[A4] and [COUNTER1]/[COUNTER2]/[COUNTER3]. "
+                "Target 800-950 words. Build 3 full contentions grounded in [A1]-[A4] and [COUNTER1]-[COUNTER3]. "
                 "Proactively address the [HARD1] and [HARD2] attacks naturally before the opponent can use them. "
-                "Acknowledge the material's caveats, then show why your mandate overcomes them. End with forward momentum."
+                "Acknowledge the material's caveats, then show why your mandate overcomes them. "
+                "Crucially: ALSO pre-emptively explain why alternatives (payroll taxes, value capture, parking reform) "
+                "cannot substitute for our mandate — briefly establish the mechanism gap in your opening. "
+                "End with forward momentum. Do NOT use the phrase 'triple mechanism' — describe the concept in "
+                "your own words."
             )
         else:
             directive += (
@@ -198,7 +210,7 @@ def _get_round_directive(current_round, side):
         return directive
     elif current_round == 5:
         return (
-            "ROUND 5: CLOSING. Target 600-800 words. Do not introduce new arguments. "
+            "ROUND 5: CLOSING. Target 650-800 words. Do not introduce new arguments. "
             "Structure: (1) Name the 2-3 most critical voting issues. "
             "(2) For each: state the clash, cite evidence, explain why we win — develop each for 3-4 sentences. "
             "(3) One paragraph of meta-weighing (certainty of harm vs. speculation of benefit; magnitude vs. probability). "
@@ -207,12 +219,18 @@ def _get_round_directive(current_round, side):
     elif side == "affirmative":
         return (
             f"ROUND {current_round}: MIDDLE GAME (AFFIRMATIVE). Structure your speech in this order:\n"
-            "1. NEW CONSTRUCTIVE (30%): Introduce ONE new angle, piece of evidence, or expansion of your case that "
-            "the opponent has not addressed. This keeps offensive pressure and prevents them from claiming you are "
-            "only playing defense. Use [A1]-[A4], [COUNTER1], [COUNTER2], [COUNTER3], or a new angle from the material.\n"
-            "2. DIRECT CLASH (50%): Name their specific arguments from their last speech and answer them directly. "
-            "Use 'Even-If' subsumption. Develop each clash for 2-3 sentences before moving on.\n"
-            "3. COUNTER-WEIGH (20%): Pivot to why the balance of evidence still favors your side overall."
+            "1. NEW CONSTRUCTIVE (35%): Introduce ONE genuinely NEW angle or piece of evidence the opponent has not "
+            "addressed. This must be a fresh expansion of your case, not a rehash of a previous round's theme. "
+            "Use a different framing device each round — e.g., one round use an economic lens, another use a public "
+            "health angle, another use an equity justice frame. Use [A1]-[A4], [COUNTER1]-[COUNTER3], or new angles "
+            "from the material.\n"
+            "2. DROPPED-CLAIM CHECK (5%): If the opponent claimed you 'dropped' an argument, ONE sentence is enough "
+            "to say you addressed it and where. Do NOT spend more than one sentence on this.\n"
+            "3. ALTERNATIVES REBUTTAL (15%): If the opponent proposed alternatives (payroll taxes, value capture, "
+            "parking reform, car-free days, HOV lanes, land-value tax, etc.), rebut them concisely. Do NOT repeat "
+            "the same rebuttal language from a previous round — find a new angle each time.\n"
+            "4. DIRECT CLASH (45%): Name their specific arguments from their last speech and answer them directly. "
+            "Use 'Even-If' subsumption. Develop each clash for 2-3 sentences before moving on."
         )
     else:
         return (
@@ -253,10 +271,11 @@ def speak(material, history, side):
     # 6. Dynamic Prep Instructions
     if current_round == 1 and side == "affirmative":
         prep_instructions = (
-            "1. Core Framework: [Plan your opening with 2-3 contentions]\n"
+            "1. Core Framework: [Plan 3 full contentions with evidence tags — target 800-950 words]\n"
             "2. Pre-emptive Strike: [Plan how to neutralize HARD1/HARD2 using M1/M2]\n"
-            "3. Current-Situation Attack: [Plan 2 ways the current arrangement is worse]\n"
-            "4. Closing Phrase: [Draft a unique, memorable closing]"
+            "3. Alternative Pre-emption: [Briefly establish why payroll taxes/value capture/parking reform cannot substitute]\n"
+            "4. Current-Situation Attack: [Plan 2 ways the current arrangement is worse]\n"
+            "5. Closing Phrase: [Draft a unique, memorable closing — avoid 'status quo']"
         )
     elif current_round == 1 and side == "negative":
         prep_instructions = (
@@ -274,10 +293,11 @@ def speak(material, history, side):
         )
     elif side == "affirmative":
         prep_instructions = (
-            "1. New Constructive: [What NEW angle can you introduce this round? Check material bank]\n"
-            "2. Opponent's Core Argument: [See opponent key claims below — which is their strongest?]\n"
-            "3. Strategic Rebuttal: [How do you answer their strongest point AND advance your new angle?]\n"
-            "4. Closing Phrase: [Check past closings below — draft something new]"
+            "1. New Constructive: [What GENUINELY NEW angle can you introduce? Different framing each round]\n"
+            "2. Dropped-Claim Check: [One sentence max if opponent claimed we dropped something]\n"
+            "3. Alternatives Rebuttal: [New angle on alternatives — don't repeat previous round's rebuttal]\n"
+            "4. Opponent's Core Argument: [See opponent key claims below — which is their strongest?]\n"
+            "5. Closing Phrase: [Check past closings below — draft something new]"
         )
     else:
         prep_instructions = (
@@ -288,9 +308,9 @@ def speak(material, history, side):
         )
 
     target_length = (
-        "600-800 words of concentrated crystallization."
+        "650-800 words of concentrated crystallization."
         if current_round == 5
-        else "700-900 words of flowing, persuasive prose."
+        else "800-950 words of flowing, persuasive prose."
     )
 
     # 7. The System Prompt
@@ -308,14 +328,21 @@ def speak(material, history, side):
         "2. NO FABRICATION — You may ONLY cite facts, statistics, examples, city names, studies, or outcomes "
         "that are EXPLICITLY present in the Material Evidence Bank below. If the material does not name a "
         "specific city, study, or statistic, you MUST NOT invent one. Instead, argue from the material's "
-        "general principles, causal mechanisms, and conditional claims. Fabricating specific evidence is the "
-        "fastest way to lose a judge's vote — opponents will seize on it.\n\n"
+        "general principles, causal mechanisms, and conditional claims. Violating this rule is the fastest "
+        "way to lose a judge's vote.\n\n"
         "3. DIRECT CLASH — Name their specific arguments and answer them directly. If they claim you 'dropped' "
         "an argument, check the transcript. If you addressed it even partially, say so and explain why your "
         "answer was sufficient. Never let a false 'dropped' claim stand uncontested.\n\n"
-        "4. NO EMPTY REPETITION — Evolve your arguments every round. Do not repeat past points, openers, or closings. "
-        "Vary your vocabulary across rounds: instead of repeating 'the status quo' every time, alternate with "
-        "'the current arrangement,' 'doing nothing,' 'the existing approach,' 'inaction,' 'the default position,' etc.\n\n"
+        "4. NO EMPTY REPETITION — Evolve your arguments every round. Do NOT repeat past points, openers, or closings. "
+        "Vary your vocabulary across rounds:\n"
+        "- Instead of repeating 'the status quo,' alternate with 'the current arrangement,' 'doing nothing,' "
+        "'the existing approach,' 'inaction,' 'the default position,' 'the baseline we are comparing against,' etc.\n"
+        "- Instead of repeating 'replaces an invisible cost with a visible one' (or similar metaphors about invisible "
+        "taxes/visible prices), find a FRESH way to express the idea that unpriced congestion already imposes costs. "
+        "You may express this underlying insight once per round, but NEVER use the same metaphor or sentence "
+        "structure twice across the debate. The judge penalizes verbatim repetition of central claims.\n"
+        "- Do NOT reuse the label 'triple mechanism' more than once in the entire debate. If you need to refer "
+        "to the concept, describe it using different words each time.\n\n"
         "5. CLOSING VARIATION — Use a different final sentence every round. Check your past closings and avoid any "
         "similarity in wording or imagery.\n\n"
         "6. MEASURED TONE — Speak conversationally and persuasively. No aggressive jargon ('destroyed', 'fallacy', "
@@ -329,9 +356,22 @@ def speak(material, history, side):
         "</speech>"
     )
 
+    # Build the fabrication reminder — placed in user prompt for maximum salience
+    if current_round == 1:
+        fabrication_reminder = ""
+    else:
+        fabrication_reminder = (
+            "\n\n=== REPEATED REMINDER: NO FABRICATION ===\n"
+            "Do NOT name specific cities (London, Stockholm, Singapore, Milan, New York, etc.), "
+            "specific statistics, or specific study outcomes unless they are EXPLICITLY quoted in the "
+            "Material Evidence Bank above. If you are unsure whether the material mentions a specific name "
+            "or number, do NOT include it. Argue from principles and mechanisms instead."
+        )
+
     user = (
         f"Motion: {material.topic}\n\n"
         f"Material Evidence Bank:\n{material_map}\n\n"
+        f"{fabrication_reminder}"
         f"Transcript (Last {MAX_TURNS} turns):\n{transcript}\n\n"
         f"--- YOUR PAST ARGUMENTS (DO NOT REPEAT THESE POINTS) ---\n"
         f"{past_arguments}\n\n"
@@ -352,7 +392,7 @@ def speak(material, history, side):
             [{"role": "system", "content": system}, {"role": "user", "content": user}]
         )
 
-        trim_limit = 4800 if current_round == 5 else 6800
+        trim_limit = 6800
         final_speech = _safe_trim(raw_output, max_chars=trim_limit)
 
         if not final_speech or len(final_speech) < 100:
