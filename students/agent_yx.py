@@ -13,13 +13,13 @@ def _get_material_map(material):
         return _MATERIAL_CACHE[key]
 
     sys_prompt = (
-        "You are an expert debate analyst. Extract a structured, highly strategic evidence bank from the material. "
-        "Be precise and concise. Use exact quotes wherever possible."
+        "You are an expert debate analyst. Extract a structured evidence bank from the material. "
+        "Output ONLY the tagged evidence below. No introductory or concluding remarks. No filler text. Use exact quotes."
     )
     user_prompt = (
         f"Motion: {material.topic}\n\n"
         f"Material:\n{material.content}\n\n"
-        "Extract the following into a concise battle plan:\n"
+        "Extract the following as tagged evidence. No filler text:\n"
         "1. AFFIRMATIVE AMMO: Extract the 4 strongest factual quotes supporting the motion. Tag them as [A1], [A2], [A3], [A4].\n"
         "2. NEGATIVE AMMO: Extract the 3 strongest factual quotes opposing the motion. Tag them as [N1], [N2], [N3].\n"
         "3. MITIGATIONS/SAFEGUARDS: What specific solutions or safety valves does the material offer to address the Negative's harms? Tag them as [M1], [M2].\n"
@@ -222,16 +222,18 @@ def _safe_trim(text, max_chars=6800):
 
 
 def _get_round_directive(current_round, side):
-    """Positive framing directives focusing on strategic coherence and dynamic clash."""
+    """Positive framing directives. AFF uses strategic coherence; NEG uses direct deep-rebuttal."""
     if current_round == 1:
         directive = "ROUND 1: OPENING. Set a measured, authoritative tone. Introduce your core case using the material. "
         if side == "affirmative":
             directive += (
                 "Target 700-900 words. Build 3 full contentions grounded in [A1]-[A4] and [COUNTER1]-[COUNTER3]. "
-                "Proactively address the [HARD1] and [HARD2] attacks naturally. "
                 "Acknowledge the material's caveats, then show why your mandate overcomes them. "
                 "Pre-emptively explain why alternatives (payroll taxes, value capture, parking reform) "
                 "cannot substitute — briefly establish the mechanism gap. "
+                "Do NOT waste time pre-empting specific negative attacks you expect — "
+                "the opponent may pivot to unexpected angles, and your pre-emption will be wasted. "
+                "Instead, build a case broad enough that you have material to counter any direction they take. "
                 "At the end, explicitly name your 2-3 core voting issues that will persist the entire debate."
             )
         else:
@@ -240,6 +242,8 @@ def _get_round_directive(current_round, side):
                 "assumes uniform readiness that the material does not support. Name the specific preconditions that "
                 "vary across contexts. Then pivot to IMPLEMENTATION FRAGILITY. Do NOT open by reacting to the "
                 "opponent's speech — set your own terms. Your first sentence must state YOUR argument. "
+                "Do NOT waste time pre-empting specific affirmative attacks — "
+                "the opponent may pivot to unexpected angles, and your pre-emption will be wasted. "
                 "At the end, explicitly name your 2-3 core voting issues that will persist the entire debate."
             )
         return directive
@@ -247,7 +251,7 @@ def _get_round_directive(current_round, side):
         return (
             "ROUND 5: CLOSING. Target 650-800 words. No new arguments. "
             "COLLAPSE the debate into 2-3 voting issues you have built across all rounds. "
-            "For each voting issue: state the clash, cite evidence, explain why we win in 2-3 sentences. "
+            "For each voting issue: state the clash, cite evidence, explain why we win. "
             "Then do ONE paragraph of meta-weighing (certainty vs. speculation; magnitude vs. probability). "
             "End with a single, powerful ballot directive — the judge should leave with ONE sentence "
             "explaining why your side wins. Use a COMPLETELY DIFFERENT closing phrase than any previous round."
@@ -258,24 +262,25 @@ def _get_round_directive(current_round, side):
             "1. DEEPEN A CORE VOTING ISSUE (30%): Advance ONE existing voting issue deeper — "
             "add a new implication, strengthen causality, or introduce a new weighing layer. "
             "Do NOT introduce an unrelated new theme unless it directly strengthens a core voting issue.\n"
-            "2. DROPPED-CLAIM CHECK (5%): If the opponent claimed you 'dropped' something, one sentence only.\n"
+            "2. NEW COUNTER-CONSTRUCTIVE (20%): Identify ONE argument the opponent just introduced that you "
+            "have not yet addressed. Build a direct, substantive response — show why it fails on its own terms "
+            "using the material's evidence. Do NOT spend more than one sentence on meta-commentary.\n"
             "3. ALTERNATIVES REBUTTAL (15%): If they proposed alternatives, rebut concisely with a NEW angle.\n"
-            "4. DIRECT CLASH (50%): Group their arguments into 2-3 strategic clusters. "
-            "Attack the shared assumption beneath each cluster. Develop each clash for 2-3 sentences. "
-            "Do NOT do line-by-line rebuttal — compress and subsume."
+            "4. DIRECT CLASH (35%): Attack the opponent's remaining arguments. "
+            "Develop each clash for 2-3 sentences. Do NOT do line-by-line rebuttal — compress and subsume."
         )
     else:
+        # NEG middle rounds: simple deep-rebuttal, no cluster labels, no dropped-claim machinery
         return (
-            f"ROUND {current_round}: STRATEGIC CONSOLIDATION (NEGATIVE).\n"
-            "1. DEEPEN A CORE VOTING ISSUE (20%): Advance your strongest pillar — "
-            "add new evidence, a new angle, or a stronger causal link.\n"
-            "2. DIRECT CLASH (60%): Group opponent arguments into 2-3 strategic clusters. "
-            "Attack the shared assumption beneath each cluster. Use 'Even-If' subsumption. "
-            "Develop each clash for 3+ sentences — shallow rebuttals lose to deep ones.\n"
-            "3. DROPPED-CLAIM REVERSAL (10%): If opponent claimed YOU dropped something, "
-            "one sentence to show you addressed it. Then turn it back: explain what THEY dropped.\n"
-            "4. BURDEN PRESSURE (10%): Remind the judge what standard the AFF must meet "
-            "and where they fall short. Keep this tight — one strong sentence."
+            f"ROUND {current_round} (NEGATIVE).\n"
+            "- DEEP REBUTTAL: Attack their 2-3 strongest arguments directly. "
+            "For each, develop your rebuttal for 3-4 sentences — show the logical gap, then explain "
+            "the broader implication. Use 'Even-If' chains to show your other pillars survive even "
+            "their best point.\n"
+            "- ADVANCE YOUR PILLARS: Add new evidence, angle, or causal link to strengthen "
+            "ONE of your three pillars.\n"
+            "- BURDEN PRESSURE: One sentence reminding the judge what AFF must prove "
+            "and where they fall short."
         )
 
 
@@ -318,7 +323,13 @@ def speak(material, history, side):
             "AFFIRMATIVE BURDEN STRATEGY:\n"
             "- You do NOT need to prove perfect implementation everywhere.\n"
             "- You only need to prove the mandate is directionally superior to continued delay.\n"
-            "- Shift the debate from 'is this perfect?' to 'is the alternative worse?'"
+            "- Shift the debate from 'is this perfect?' to 'is the alternative worse?'\n"
+            "MANDATE = FRAMEWORK, NOT STRAITJACKET:\n"
+            "- If they argue local flexibility makes the mandate an 'empty directive,' this is false. "
+            "A mandate forces the ACTION (breaking political paralysis), while delegating the PARAMETERS "
+            "(zone size, fee level, exemptions) to local experts. A legal requirement to price congestion "
+            "gives mayors the political cover to act — something voluntary adoption never provides. "
+            "Without the mandate, every mayor waits for someone else to go first."
         )
     else:
         strategic_context = (
@@ -332,8 +343,8 @@ def speak(material, history, side):
             "- One major failure case is enough to reject a blanket mandate.\n"
             "- Force AFF to defend their weakest-case scenario, not just their best case.\n"
             "THREE PILLARS (rotate emphasis, evolve language each round):\n"
-            "- Pillar 1: CONDITIONAL EFFECTIVENESS — mandate assumes uniform readiness ([N1]-[N3], [HARD1]-[HARD2])\n"
-            "- Pillar 2: IMPLEMENTATION FRAGILITY — complexity, backlash, political brittleness ([HARD1], [HARD2])\n"
+            "- Pillar 1: CONDITIONAL EFFECTIVENESS — mandate assumes uniform readiness ([N1]-[N3])\n"
+            "- Pillar 2: IMPLEMENTATION FRAGILITY — complexity, backlash, political brittleness ([N1]-[N3])\n"
             "- Pillar 3: CAUSAL INVERSION — impose first, build trust later reverses the required sequence ([M1], [M2])"
         )
 
@@ -344,16 +355,15 @@ def speak(material, history, side):
     if current_round == 1 and side == "affirmative":
         prep_instructions = (
             "1. Core Framework: [Plan 3 contentions with evidence tags — target 700-900 words]\n"
-            "2. Pre-emptive Strike: [Neutralize HARD1/HARD2 using M1/M2]\n"
-            "3. Alternative Pre-emption: [Why payroll taxes/value capture/parking reform cannot substitute]\n"
-            "4. Current-Situation Attack: [2 ways the existing arrangement is worse]\n"
-            "5. Voting Issues: [Name the 2-3 issues you will carry through all rounds]\n"
-            "6. Closing Phrase: [Unique closing — avoid generic phrases]"
+            "2. Alternative Pre-emption: [Why payroll taxes/value capture/parking reform cannot substitute]\n"
+            "3. Current-Situation Attack: [2 ways the existing arrangement is worse]\n"
+            "4. Voting Issues: [Name the 2-3 issues you will carry through all rounds]\n"
+            "5. Closing Phrase: [Unique closing — avoid generic phrases]"
         )
     elif current_round == 1 and side == "negative":
         prep_instructions = (
             "1. Core Framework: [Open with CONDITIONAL EFFECTIVENESS — mandate assumes uniform readiness]\n"
-            "2. Offensive Strike: [IMPLEMENTATION FRAGILITY using HARD1/HARD2]\n"
+            "2. Offensive Strike: [IMPLEMENTATION FRAGILITY — use your strongest negative evidence]\n"
             "3. AFF Vulnerability: [1 weakness using COUNTER1/COUNTER2 to preempt]\n"
             "4. Voting Issues: [Name the 2-3 pillars you will deepen all rounds]\n"
             "5. Closing Phrase: [Unique closing — avoid 'vote negative']"
@@ -369,17 +379,16 @@ def speak(material, history, side):
     elif side == "affirmative":
         prep_instructions = (
             "1. Deepen a Core Issue: [Which voting issue will you advance? New angle?]\n"
-            "2. Opponent Clusters: [Group their args into 2-3 assumptions — which shared assumption to attack?]\n"
-            "3. Concession Check: [What did they NOT answer? How does it imply you win?]\n"
+            "2. New Counter: [What NEW argument did the opponent just introduce? How to defeat it?]\n"
+            "3. Opponent Clusters: [Group their remaining args — which shared assumption to attack?]\n"
             "4. Closing Phrase: [Check past closings — something new]"
         )
     else:
         prep_instructions = (
             "1. Deepen a Pillar: [Which pillar to advance? New evidence or angle?]\n"
-            "2. Opponent Clusters: [Group their args — which shared assumption to attack?]\n"
+            "2. Key Rebuttal Targets: [Which 2-3 opponent arguments to attack? What's the logical gap?]\n"
             "3. Even-If Planning: [Grant their best rebuttal, show other pillars survive]\n"
-            "4. Burden Pressure: [Where does AFF fall short of their mandate?]\n"
-            "5. Closing Phrase: [Check past closings — something new]"
+            "4. Closing Phrase: [Check past closings — something new]"
         )
 
     target_length = (
@@ -393,18 +402,21 @@ def speak(material, history, side):
         "You are an expert debate speaker evaluated by an AI judge on five criteria: "
         "grounding in material, logical reasoning, direct clash, no empty repetition, and offensive pressure.\n\n"
         "CORE RULES:\n\n"
-        "1. STRICT GROUNDING — Use YOUR OWN evidence tags ([A1], [N1], [M1], [HARD1], [COUNTER1]) from "
-        "the Material Evidence Bank below. Your opponent uses DIFFERENT tag labels — NEVER claim an "
-        "opponent's tag is 'ungrounded' based on the label. Only challenge the SUBSTANCE.\n\n"
+        "1. STRICT GROUNDING — You are working from a CONDENSED Evidence Bank (selected quotes), "
+        "while the opponent has access to the full unabridged text. NEVER accuse the opponent of "
+        "fabricating, misquoting, or inventing evidence. Assume their textual citations are 100% "
+        "accurate. If you do not recognize a quote, assume it is from a part of the material your "
+        "extraction did not cover. Attack the LOGIC, CONTEXT, and IMPACT of their evidence — never "
+        "its provenance. Your own citations must come from YOUR Evidence Bank tags.\n\n"
         "2. NO FABRICATION — You may ONLY cite facts, statistics, city names, or studies that are "
         "EXPLICITLY in the Material Evidence Bank. If the material does not name a specific city or "
         "statistic, you MUST NOT invent one. Argue from principles and mechanisms instead.\n\n"
         "3. STRATEGIC COHERENCE — Maintain 2-3 persistent voting issues across all rounds. Deepen them "
         "rather than rotating themes. Every new argument must strengthen a core voting issue. "
         "A judge who hears 10 speeches will remember coherent narratives, not scattered subpoints.\n\n"
-        "4. DIRECT CLASH — Group opponent arguments into 2-3 strategic clusters. Attack the shared "
-        "assumption beneath each cluster. Do NOT do line-by-line rebuttal. If they claim you 'dropped' "
-        "something, check the transcript and answer in one sentence.\n\n"
+        "4. DIRECT CLASH — Attack the opponent's arguments directly and deeply. "
+        "Do NOT do line-by-line rebuttal. Compress and subsume weaker arguments into larger thematic clashes. "
+        "If they claim you 'dropped' something, check the transcript and answer in one sentence.\n\n"
         "5. NO EMPTY REPETITION — Evolve your language every round. Check your past arguments and "
         "structural frames below to avoid overlap. Use a different opener and closing every round.\n\n"
         "6. MEASURED TONE — Conversational and persuasive. No aggressive jargon ('destroyed', 'fallacy', "
@@ -423,7 +435,11 @@ def speak(material, history, side):
         "\n\n=== REMINDER: NO FABRICATION ===\n"
         "Do NOT name specific cities (London, Stockholm, Singapore, Milan, New York, etc.), "
         "specific statistics, or specific study outcomes unless EXPLICITLY quoted in the "
-        "Material Evidence Bank above. If unsure, do NOT include it. Argue from principles."
+        "Material Evidence Bank above. If unsure, do NOT include it. Argue from principles.\n\n"
+        "=== REMINDER: NEVER DISPUTE OPPONENT'S EVIDENCE ===\n"
+        "You have a condensed extraction of the material. The opponent has the full text. "
+        "NEVER say their quote 'does not appear' or 'is not in the material' — it probably is, "
+        "just in a section your extraction did not include. Attack their ARGUMENT, not their source."
     )
 
     # Build user prompt
@@ -443,11 +459,19 @@ def speak(material, history, side):
     ]
 
     # Only add these for rounds after R1 (they need history)
+    # AFF: inject R2+ (strategic coherence helps AFF)
+    # NEG: inject R5 only (meta-framework hurts NEG in middle rounds)
     if current_round > 1:
-        if core_voting_issues:
-            sections.append(f"{core_voting_issues}\n\n")
-        if concessions:
-            sections.append(f"{concessions}\n\n")
+        if side == "affirmative":
+            if core_voting_issues:
+                sections.append(f"{core_voting_issues}\n\n")
+            if concessions:
+                sections.append(f"{concessions}\n\n")
+        elif current_round == 5:
+            if core_voting_issues:
+                sections.append(f"{core_voting_issues}\n\n")
+            if concessions:
+                sections.append(f"{concessions}\n\n")
 
     sections.append(
         f"Side: {side.upper()}\n"
