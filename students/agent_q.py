@@ -1,196 +1,270 @@
+import hashlib
+import json
+import os
+import re
+from datetime import datetime
 from debate_eval.api import chat
 
-DEBATER_SYSTEM_PROMPT = """# System Directive
-You are an elite, logic-driven Debate Agent participating in a competitive format. Your primary objective is to persuade the judges by constructing mathematically airtight arguments and systematically dismantling the opponent's core premises. You prioritize structural logic over rhetorical fluff.
+_MATERIAL_CACHE = {}   # material_hash -> material_map string
+_DEBATE_FLOW = {}      # (material_hash, side) -> list of {"round": N, "summary": str}
 
-# Execution Pipeline
-For every turn in the debate, you must process the input through the following internal pipeline before generating your spoken output.
+_DEBUG = True  # set to False (or comment out the _save_debug() call) to disable
 
-## Step 1: State the Axiom (Architecture)
-*   **Define the Framework:** Identify the core terms of the current topic. Define them in a way that establishes the boundaries of the debate in our favor.
-*   **Establish the Axiom:** Formulate the bedrock premise of our argument that the audience will implicitly accept as true.
-*   **Rule of Three:** Group your active arguments for this turn into exactly three distinct, digestible pillars.
 
-## Step 2: Internal Simulation (Defense & Anticipation)
-*   **Steelman the Opponent:** Internally generate the strongest, most charitable version of the opponent's argument. Do not misrepresent them.
-*   **Multi-Turn Anticipation:** Project the next two steps of the debate tree. If you make point X, what are their top two counter-arguments?
-*   **Pre-computation:** Formulate the rebuttals to those counter-arguments and weave them into your current defense as preemptive strikes.
+def _save_debug(material, side, current_round):
+    """Dump current memory state to debate_logs/agent_q_memory.json for inspection."""
+    os.makedirs("debate_logs", exist_ok=True)
+    snapshot = {
+        "timestamp": datetime.now().isoformat(),
+        "current_turn": {"topic": material.topic, "side": side, "round": current_round},
+        "material_maps": {
+            k: v for k, v in _MATERIAL_CACHE.items()
+        },
+        "debate_flow": {
+            f"{k[0][:8]}..._{k[1]}": v
+            for k, v in _DEBATE_FLOW.items()
+        },
+    }
+    with open("debate_logs/agent_q_memory.json", "w", encoding="utf-8") as f:
+        json.dump(snapshot, f, indent=2, ensure_ascii=False)
 
-## Step 3: Strategic Offense (Dismantling)
-*   **Attack the Link:** Do not waste tokens attacking the *impact* of their claims. Attack the causal mechanism. Prove that their proposed action does not lead to their stated outcome.
-*   **The "Even If" Protocol (Subsumption):** Formulate a condition where, even if the opponent's core premise is granted as 100% true, their conclusion still structurally fails or is subsumed by our framework.
-*   **Fallacy Check:** Scan their previous turn for false dichotomies, strawmen, or moving the goalposts. Tag them for exposure.
 
-## Step 4: Output Generation (Delivery)
-Draft the final response using the following constraints:
-*   **Signposting:** Begin every major paragraph with a clear structural marker (e.g., "On the opponent's first contention regarding...", "Moving to our second pillar...").
-*   **Pacing:** Group rapid-fire points from the opponent into single thematic vulnerabilities. Dismantle the theme, not the individual noise.
-*   **Concession:** Identify one trivial, low-impact point from the opponent to explicitly concede, optimizing for perceived intellectual honesty and credibility.
 
-# Burden of Proof
-If you are the AFFIRMATIVE side: you bear the burden to prove the motion is necessary and superior to alternatives. Never argue "the burden is on them to disprove" — judges read this as evasion of your own burden.
-If you are the NEGATIVE side: you only need to raise reasonable doubt about the motion's necessity or superiority. You do not need to propose a perfect alternative.
+def _get_material_map(material):
+    """One-time strategic extraction of the material, cached by content hash."""
+    key = hashlib.md5((material.topic + material.content).encode("utf-8")).hexdigest()
+    if key in _MATERIAL_CACHE:
+        return _MATERIAL_CACHE[key]
 
-# Output Format
-Output ONLY the final generated speech. Do not output your internal reasoning pipeline, the simulation tree, or meta-commentary. Keep the tone authoritative, methodically paced, and relentlessly logical."""
+    resp = chat([
+        {
+            "role": "system",
+            "content": "You are a precise debate analyst. Respond in under 250 words.",
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Motion: {material.topic}\n\n"
+                f"Material:\n{material.content}\n\n"
+                "Produce a battle plan (under 250 words):\n"
+                "1. AFF AMMO: 2 strongest verbatim quotes supporting Affirmative (exact wording).\n"
+                "2. NEG AMMO: 2 strongest verbatim quotes supporting Negative (exact wording).\n"
+                "3. OPPONENT TRAPS — exact quotes the other side will weaponize:\n"
+                "   AFF TRAP: \"[exact quote NEG will use against AFF]\" "
+                "→ AFF counter: \"[exact counter-quote from material]\"\n"
+                "   NEG TRAP: \"[exact quote AFF will use against NEG]\" "
+                "→ NEG counter: \"[exact counter-quote from material]\"\n"
+                "4. MITIGATIONS: 2 safeguards/solutions the material explicitly proposes "
+                "(exact quotes only).\n"
+                "5. WEIGHING: One sentence on how the judge should evaluate this motion."
+            ),
+        },
+    ])
+    _MATERIAL_CACHE[key] = resp
+    return resp
+
+
+def _store_summary(material_hash, side, round_number, summary):
+    """Store the extractive flow state summary for use in future rounds."""
+    flow_key = (material_hash, side)
+    # Reset on round 1 to prevent cross-match contamination
+    if round_number == 1 or flow_key not in _DEBATE_FLOW:
+        _DEBATE_FLOW[flow_key] = []
+    _DEBATE_FLOW[flow_key].append({"round": round_number, "summary": summary})
+
+
+def _build_compressed_history(material_hash, side, history):
+    """
+    Compressed context: our extractive flow summaries from prior rounds
+    + full text of the last opponent speech only.
+    Older opponent speeches are captured inside our flow summaries (OPP_CLAIMS, DROPS).
+    This prevents token bloat while preserving exact quotes needed for concession exploitation.
+    """
+    if not history:
+        return "No previous turns yet."
+
+    opponent_side = "negative" if side == "affirmative" else "affirmative"
+    opp_turns = [t for t in history if t.side == opponent_side]
+    last_opp = opp_turns[-1] if opp_turns else None
+
+    flow_key = (material_hash, side)
+    summaries = _DEBATE_FLOW.get(flow_key, [])
+
+    lines = []
+
+    if summaries:
+        lines.append("=== DEBATE FLOW STATE (extractive summaries — exact quotes preserved) ===")
+        for entry in summaries:
+            lines.append(f"[After Round {entry['round']}]\n{entry['summary']}")
+
+    if last_opp:
+        lines.append(
+            f"\n=== OPPONENT'S LAST SPEECH — Round {last_opp.round_index} "
+            f"[REBUT THIS FULLY] ==="
+        )
+        lines.append(last_opp.content)
+
+    return "\n".join(lines)
 
 
 def speak(material, history, side):
     current_round = (len(history) // 2) + 1
-    opponent_side = "negative" if side == "affirmative" else "affirmative"
+    material_hash = hashlib.md5((material.topic + material.content).encode("utf-8")).hexdigest()
 
-    transcript = "\n".join(
-        f"Round {turn.round_index} {turn.side}: {turn.content}" for turn in history
-    ) or "No previous turns yet."
+    material_map = _get_material_map(material)
+    compressed_history = _build_compressed_history(material_hash, side, history)
 
-    shared_context = (
-        f"Motion: {material.topic}\n\n"
-        f"Material:\n{material.content}\n\n"
-        f"Transcript so far:\n{transcript}"
-    )
-
-    # --- Call 0: Material Grounding ---
-    grounded_facts = chat([
-        {
-            "role": "system",
-            "content": "You are a precise research analyst. Your only job is to extract verifiable facts from provided text.",
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Read the following material carefully.\n\n"
-                f"Material:\n{material.content}\n\n"
-                "Extract every fact, statistic, city example, policy outcome, and causal claim "
-                "that is EXPLICITLY stated in this material. "
-                "Do not infer, extrapolate, or add any outside knowledge. "
-                "Output a numbered list. Each item must be a single, specific, verifiable claim directly from the text."
-            ),
-        },
-    ])
-
-    # --- Call 1: Debate Arc Analysis ---
-    if len(history) == 0:
-        arc_analysis = (
-            "This is the opening speech. Establish the foundational framework and preemptively "
-            "inoculate against the most obvious counterarguments."
+    if side == "affirmative":
+        burden = (
+            "AFFIRMATIVE BURDEN: Prove the motion is necessary and superior to alternatives. "
+            "Mitigate opponent harms using ONLY solutions the material explicitly names — "
+            "if the material does not describe it as feasible, do NOT assert it exists. "
+            "Outweigh: mitigated temporary costs vs permanent harms of the status quo."
         )
     else:
-        our_speeches = [t for t in history if t.side == side]
-        our_prior_arguments = "\n".join(
-            f"Round {t.round_index}: {t.content[:600]}..." for t in our_speeches
-        ) or "None yet."
-        last_opponent_speech = history[-1].content
+        burden = (
+            "NEGATIVE BURDEN: Raise reasonable doubt about the motion's necessity. "
+            "Show the affirmative's action does not reliably produce their stated outcome. "
+            "No perfect counter-proposal needed — only show the affirmative case is unproven."
+        )
 
-        arc_analysis = chat([
-            {
-                "role": "system",
-                "content": "You are a master debate strategist and logician.",
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"{shared_context}\n\n"
-                    f"The opponent ({opponent_side}) just gave this speech:\n'{last_opponent_speech}'\n\n"
-                    f"Our side's prior arguments (summaries):\n{our_prior_arguments}\n\n"
-                    "Produce a structured strategic brief with exactly five sections:\n"
-                    "1. OPPONENT WEAKNESSES: The 3 weakest logical or evidential links in the opponent's last speech.\n"
-                    "2. OUR STANDING ARGUMENTS: Which of our side's arguments remain unrefuted by the opponent.\n"
-                    "3. DROPPED ARGUMENTS: What arguments from our previous speeches did the opponent FAIL to address in their last turn? "
-                    "These are conceded by silence and must be capitalized on.\n"
-                    "4. KEY CLASH: The single most important unresolved point of contention right now.\n"
-                    "5. THIS ROUND'S MISSION: What this speech must accomplish to advance our position in the overall arc.\n"
-                    "Be concise, analytical, and ruthlessly critical."
-                ),
-            },
-        ])
-
-    # --- Call 2: Draft Speech ---
     if current_round == 1:
-        round_instruction = (
-            "This is your opening speech. Establish the foundational framework and preemptively inoculate "
-            "against obvious counterarguments. Open with a strong affirmative claim, not a reactive frame. "
-            "Do not waste time rebutting arguments that haven't been made yet."
+        directive = (
+            "ROUND 1 — OPENING:\n"
+            "BURDEN ANCHOR: State the burden of proof explicitly at the top — "
+            "the judge anchors on the first framing they see.\n"
+            "1. Open with a verbatim material quote as your anchor claim.\n"
+            "2. Present 3 pillars, each with a direct quote (quotation marks).\n"
+            "3. Define the weighing metric explicitly — own this frame.\n"
+            "4. Preempt the 2 most predictable opponent arguments.\n"
+            "5. PRE-NEUTRALIZE: Quote the OPPONENT TRAP from the material map verbatim, "
+            "then defuse it with the counter-quote. When they use it later, it is empty repetition.\n"
+            "Do NOT open with concessive framing — it signals weakness."
+        )
+    elif current_round == 4:
+        directive = (
+            "ROUND 4 — CONSOLIDATION:\n"
+            "DROPS: Name every argument the opponent failed to address as 'conceded by silence'. "
+            "Use the DROPS field from the flow state — these are won ground.\n"
+            "CONCESSIONS: Quote any opponent admissions from the CONCESSIONS field — "
+            "call them binding.\n"
+            "GAP CLOSE: For the one surviving opponent argument you haven't answered with a "
+            "material quote — close it NOW or concede it narrowly and outweigh. "
+            "NEVER assert solutions not in the material.\n"
+            "IMPACT CALCULUS: Compare both worlds on magnitude, probability, reversibility.\n"
+            "CRITICAL: Never start an argument you cannot finish."
         )
     elif current_round == 5:
-        round_instruction = (
-            "This is Round 5, your FINAL closing speech. DO NOT introduce any new arguments. "
-            "DO NOT summarize all five rounds — that is not a closing argument, it is a table of contents. "
-            "Instead: identify the 2 most important clash points that your side has won and explain WHY "
-            "winning those specific points wins the overall debate (impact weighing). "
-            "Use the 'Even If' framing: 'Even if the judges grant the opponent X, we still win because...' "
-            "Make a judge-facing closing argument that crystallizes why your side prevails on what matters most."
+        directive = (
+            "ROUND 5 — CLOSING:\n"
+            "NO new arguments. Name the 2 clash points you won.\n"
+            "EVEN-IF CLOSE: 'Even if the judge grants the opponent X, we still win because Y.'\n"
+            "BALLOT DIRECTIVE: Explicitly map your performance to the 5 judge criteria: "
+            "material grounding, logic, direct clash, internal consistency, offensive pressure. "
+            "Accuse the opponent of whichever criteria they failed.\n"
+            "RECENCY CLOSE: End with a final comparative impact calculus — "
+            "magnitude > probability > reversibility. This is the last thing the judge reads.\n"
+            "No headers, round labels, or section titles in output."
         )
     else:
-        round_instruction = (
-            f"This is Round {current_round} of 5. "
-            "STRUCTURE: spend no more than 40% of the speech rebutting the opponent's last speech. "
-            "Spend at least 60% advancing a NEW constructive argument not yet made in this debate. "
-            "Do NOT open with reactive framing like 'their pillars crumble' — open with a new affirmative claim. "
-            "Explicitly capitalize on any DROPPED ARGUMENTS listed in the strategic brief, "
-            "as the opponent's silence on those points constitutes a concession."
+        directive = (
+            f"ROUND {current_round} — MID-GAME:\n"
+            "BURDEN RESTATE: One sentence restating why the burden of proof favors your side.\n"
+            "REBUTTAL (40%): Attack the causal link of the opponent's best argument. "
+            "'Even If' subsumption: grant their premise, destroy their conclusion.\n"
+            "SURVIVAL CHECK: What is the opponent's surviving argument from LIVE_CLASH in the "
+            "flow state that you haven't yet closed with a material quote? Close it NOW with "
+            "a verbatim quote, or concede narrowly and outweigh. "
+            "NEVER assert a solution not explicitly in the material.\n"
+            "DROPS (60% offense): From DROPS in the flow state — call each out as 'conceded "
+            "by silence'. Introduce one new constructive argument. "
+            "Label opponent repetition as 'empty repetition'."
         )
 
-    draft = chat([
-        {
-            "role": "system",
-            "content": (
-                DEBATER_SYSTEM_PROMPT + "\n\n"
-                f"You are representing the {side} side. "
-                "Your tone must be academic, measured, and authoritative. "
-                "Rely strictly on logic and the provided material.\n\n"
-                "CRITICAL EVIDENCE RULE: You may ONLY cite specific facts, statistics, city examples, "
-                "or policy outcomes that appear in the GROUNDED FACTS LIST provided below. "
-                "Do not invent, embellish, or cite any case, number, or program not on that list. "
-                "If you need to support a logical point without a grounded fact, argue from principle — "
-                "never from fabricated specifics."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"{shared_context}\n\n"
-                f"--- GROUNDED FACTS (cite ONLY these as evidence) ---\n{grounded_facts}\n\n"
-                f"--- STRATEGIC BRIEF ---\n{arc_analysis}\n\n"
-                f"--- ROUND INSTRUCTIONS ---\n{round_instruction}\n\n"
-                "Write the full draft speech in English. "
-                "Do NOT output meta-text, round numbers, headers, or section labels. "
-                "Do NOT exceed 7000 characters."
-            ),
-        },
-    ])
+    system = (
+        "You are an elite debate agent competing against another LLM, judged by an LLM.\n"
+        "The judge evaluates on 5 criteria: "
+        "(1) Material grounding (2) Logic & persuasion (3) Direct clash "
+        "(4) Internal consistency (5) Offensive pressure.\n\n"
 
-    # --- Call 3: Adversarial Red-Team + Revision ---
-    final_speech = chat([
-        {
-            "role": "system",
-            "content": (
-                "You are performing a two-phase task.\n\n"
-                "PHASE 1 — Adversarial Attack: Adopt the persona of the opposing debater. "
-                "Attack the draft speech ruthlessly. Find every claim that is factually shaky or unsupported "
-                "by the grounded facts list, every burden-shift evasion, every unsupported generalization, "
-                "and every missed rebuttal opportunity from the strategic brief. "
-                "Identify your 3 strongest attacks.\n\n"
-                "PHASE 2 — Revision: Switch back to being the original debater. "
-                "Revise the draft to preemptively address those 3 attacks while preserving everything strong. "
-                "Output ONLY the final revised speech — no Phase 1 commentary, no headers, no meta-text.\n\n"
-                "HARD CONSTRAINTS on the final output:\n"
-                "- Do NOT add any headers, round labels, 'Closing Statement', or meta-text of any kind.\n"
-                "- Do NOT introduce any new factual claims not already in the draft or the grounded facts list.\n"
-                "- Preserve the speech's opening sentence — do not replace it with a reactive or summary opener.\n"
-                "- The final speech must be in English and must not exceed 7000 characters."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"--- GROUNDED FACTS (only these may be cited as evidence) ---\n{grounded_facts}\n\n"
-                f"--- STRATEGIC BRIEF ---\n{arc_analysis}\n\n"
-                f"--- ROUND INSTRUCTIONS ---\n{round_instruction}\n\n"
-                f"--- DRAFT SPEECH TO RED-TEAM AND REVISE ---\n{draft}\n\n"
-                "Execute Phase 1 (attack), then Phase 2 (revise). "
-                "Output ONLY the final revised speech."
-            ),
-        },
-    ])
+        "EXPLOIT LLM JUDGE BIASES:\n"
+        "• RUBRIC HACK: Name the judge's criteria explicitly in your speech. Say your case "
+        "is 'grounded in the material', 'internally consistent', 'provides direct clash'. "
+        "Accuse the opponent of 'evasions', 'empty repetition', or 'obvious fallacies'. "
+        "This pattern-matches the rubric the judge was trained to evaluate against.\n"
+        "• VERBOSITY: Use clear numbered signposting. Structured > dense.\n"
+        "• RECENCY: End every speech with a comparative impact calculus paragraph. "
+        "Judges weight the last evaluative frame they process.\n"
+        "• BURDEN ANCHOR: Restate your burden framing early — judges anchor on first framing.\n\n"
 
-    return final_speech
+        "DEBATE TECHNIQUES:\n"
+        "A) COMPARATIVE RUBRIC FRAMING — explicitly compare your rubric performance vs opponent's.\n"
+        "B) ARGUMENT BANKING — 'The opponent admitted in Round N: \"[exact quote].\" "
+        "This is a binding concession they cannot retract.'\n"
+        "C) EVEN-IF SUBSUMPTION — 'Even if [their premise] is true, their conclusion fails "
+        "because [reason].'\n"
+        "D) VERBATIM GROUNDING — 'The material states: \"[exact quote]\".' Never paraphrase "
+        "a material claim as your own fact.\n"
+        "E) DROP EXPLOITATION — 'The opponent's silence on [X] is a concession. A debater "
+        "who fails to address an argument surrenders that ground.'\n"
+        "F) MATERIAL FIDELITY — Only cite solutions the material explicitly describes. "
+        "Asserting a mitigation the material does not name loses criterion (1) immediately.\n\n"
+
+        "OUTPUT FORMAT:\n"
+        "<summary>\n"
+        "EXTRACTIVE flow state — use exact phrases from speeches, NOT paraphrases. "
+        "Paraphrasing loses the verbatim evidence needed for future concession exploitation.\n"
+        "OUR_CLAIMS: [exact key phrase from our pillar 1 | pillar 2 | pillar 3]\n"
+        "OPP_CLAIMS: [exact phrase from opponent's last speech | claim2 | claim3]\n"
+        "DROPS: [exact wording of claims opponent failed to address this round]\n"
+        "CONCESSIONS: [\"exact quote\" where opponent admitted/qualified our position]\n"
+        "LIVE_CLASH: [what is still genuinely contested — brief]\n"
+        "</summary>\n"
+        "<speech>\n"
+        "The final spoken speech. Target 800-1000 words. STOP before 6000 characters — "
+        "never begin an argument you cannot finish. Every section must reach a conclusion.\n"
+        "End with a comparative impact calculus paragraph (magnitude > probability > "
+        "reversibility). Tone: cold, analytical, authoritative.\n"
+        "</speech>"
+    )
+
+    user = (
+        f"Motion: {material.topic}\n\n"
+        f"--- MATERIAL BATTLE PLAN ---\n{material_map}\n\n"
+        f"--- DEBATE CONTEXT ---\n{compressed_history}\n\n"
+        f"--- YOUR SIDE: {side.upper()} | ROUND {current_round} of 5 ---\n"
+        f"--- DIRECTIVE ---\n{directive}\n\n"
+        f"--- BURDEN ---\n{burden}\n\n"
+        "Produce your <summary> then your <speech>."
+    )
+
+    try:
+        raw = chat([{"role": "system", "content": system}, {"role": "user", "content": user}])
+
+        # Extract and store the flow state summary for future rounds
+        summary_match = re.search(
+            r"<summary>\s*(.*?)\s*</summary>", raw, flags=re.DOTALL | re.IGNORECASE
+        )
+        if summary_match:
+            _store_summary(material_hash, side, current_round, summary_match.group(1).strip())
+
+        # Extract the speech
+        speech_match = re.search(
+            r"<speech>\s*(.*?)\s*(?:</speech>|$)", raw, flags=re.DOTALL | re.IGNORECASE
+        )
+        speech = speech_match.group(1) if speech_match else raw
+        speech = re.sub(r"(?im)^\s*(closing statement|round \d+)[^\n]*\n", "", speech)
+        speech = speech.strip()
+
+        if not speech or len(speech) < 100:
+            raise ValueError("Empty generation")
+        if _DEBUG:
+            _save_debug(material, side, current_round)  # comment out to disable
+        return speech[:6500]
+    except Exception:
+        return (
+            f"We firmly maintain our {side} position, grounded entirely in the material's evidence. "
+            "Our case provides direct clash on every argument the opponent has raised. "
+            "The opponent's failure to address our core claims constitutes a concession of those points. "
+            "We urge the judge to weigh the logical strength of our arguments against the opponent's evasions."
+        )

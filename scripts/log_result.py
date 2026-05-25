@@ -63,13 +63,35 @@ def load_csv():
         return list(csv.DictReader(f))
 
 
+FIELDNAMES = [
+    "date", "affirmative", "aff_commit", "negative", "neg_commit",
+    "material", "material_commit", "log_file", "aff_votes", "neg_votes", "winner",
+    "aff_calls", "neg_calls", "aff_max_turn_s", "neg_max_turn_s",
+]
+
+
 def save_csv(rows):
-    fieldnames = ["date", "affirmative", "aff_commit", "negative", "neg_commit",
-                  "material", "material_commit", "log_file", "aff_votes", "neg_votes", "winner"]
     with open(LEADERBOARD_CSV, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+
+
+def extract_perf(data):
+    """Pull call counts and max per-turn time from a debate JSON. Handles old logs without timing."""
+    usage = data.get("usage", {})
+    aff_u = usage.get("affirmative", {})
+    neg_u = usage.get("negative", {})
+
+    aff_times = aff_u.get("time taken", [])
+    neg_times = neg_u.get("time taken", [])
+
+    return {
+        "aff_calls": aff_u.get("chat_calls", ""),
+        "neg_calls": neg_u.get("chat_calls", ""),
+        "aff_max_turn_s": f"{max(aff_times):.1f}" if aff_times else "",
+        "neg_max_turn_s": f"{max(neg_times):.1f}" if neg_times else "",
+    }
 
 
 def blob_url(filepath, commit):
@@ -78,25 +100,35 @@ def blob_url(filepath, commit):
     return f"{GITHUB_REPO}/blob/{commit}/{filepath}"
 
 
+def _perf_cell(calls, max_s):
+    """Format a compact per-side performance string: '14c 112s' or '14c' or '—'."""
+    if not calls:
+        return "—"
+    if max_s:
+        return f"{calls}c {max_s}s"
+    return f"{calls}c"
+
+
 def render_md(rows):
     lines = [
         "# Debate Leaderboard",
         "",
         "Each agent filename links to the exact commit that was used during that debate.",
         "Each log links to the recorded transcript and judge votes.",
+        "Perf columns: `Nc` = total API calls, `Ms` = max per-turn seconds (blank = timing not recorded).",
         "",
-        "| Date | Affirmative | Negative | Material | Score | Winner | Log |",
-        "|------|-------------|----------|----------|-------|--------|-----|",
+        "| Date | Affirmative | Negative | Material | Score | Winner | Perf (A/N) | Log |",
+        "|------|-------------|----------|----------|-------|--------|------------|-----|",
     ]
     for r in rows:
         date = r["date"]
-        aff_short = r["aff_commit"][:7] if r["aff_commit"] else "?"
-        neg_short = r["neg_commit"][:7] if r["neg_commit"] else "?"
-        mat_short = r["material_commit"][:7] if r["material_commit"] else "?"
+        aff_short = r["aff_commit"][:7] if r.get("aff_commit") else "?"
+        neg_short = r["neg_commit"][:7] if r.get("neg_commit") else "?"
+        mat_short = r["material_commit"][:7] if r.get("material_commit") else "?"
 
-        aff_url = blob_url(f"students/{r['affirmative']}.py", r["aff_commit"])
-        neg_url = blob_url(f"students/{r['negative']}.py", r["neg_commit"])
-        mat_url = blob_url(f"materials/{r['material']}", r["material_commit"])
+        aff_url = blob_url(f"students/{r['affirmative']}.py", r.get("aff_commit", ""))
+        neg_url = blob_url(f"students/{r['negative']}.py", r.get("neg_commit", ""))
+        mat_url = blob_url(f"materials/{r['material']}", r.get("material_commit", ""))
         log_url = f"debate_logs/{r['log_file']}"
 
         aff_cell = f"[{r['affirmative']} `{aff_short}`]({aff_url})"
@@ -106,8 +138,12 @@ def render_md(rows):
         winner = r["winner"]
         winner_cell = f"**{winner}**" if winner == "affirmative" else winner
 
+        aff_perf = _perf_cell(r.get("aff_calls", ""), r.get("aff_max_turn_s", ""))
+        neg_perf = _perf_cell(r.get("neg_calls", ""), r.get("neg_max_turn_s", ""))
+        perf_cell = aff_perf + r" \| " + neg_perf
+
         lines.append(
-            f"| {date} | {aff_cell} | {neg_cell} | {mat_cell} | {score} | {winner_cell} | [log]({log_url}) |"
+            f"| {date} | {aff_cell} | {neg_cell} | {mat_cell} | {score} | {winner_cell} | {perf_cell} | [log]({log_url}) |"
         )
 
     lines.append("")
@@ -144,8 +180,8 @@ def main():
     debate_dt = parse_debate_timestamp(log_path.name)
     date_str = debate_dt.strftime("%Y-%m-%d")
 
-    aff_name = data["Affirmative Name"]
-    neg_name = data["Negative Name"]
+    aff_name = data.get("affirmative_name") or data["Affirmative Name"]
+    neg_name = data.get("negative_name") or data["Negative Name"]
     material = data["material_name"]
     votes = data["judge_votes"]
     aff_votes = votes.count("affirmative")
@@ -161,6 +197,8 @@ def main():
     if not neg_commit:
         print(f"Warning: could not find commit for students/{neg_name}.py before {debate_dt}")
 
+    perf = extract_perf(data)
+
     new_row = {
         "date": date_str,
         "affirmative": aff_name,
@@ -173,13 +211,21 @@ def main():
         "aff_votes": aff_votes,
         "neg_votes": neg_votes,
         "winner": winner,
+        **perf,
     }
 
     rows = load_csv()
 
-    # Deduplicate by log_file
-    if any(r["log_file"] == log_path.name for r in rows):
-        print(f"Row for {log_path.name} already exists in leaderboard.csv — skipping.")
+    existing = next((r for r in rows if r["log_file"] == log_path.name), None)
+    if existing is not None:
+        # Update perf stats if any of the new columns are missing in the stored row
+        missing = not all(existing.get(k) for k in ("aff_calls", "neg_calls"))
+        if missing:
+            existing.update(perf)
+            save_csv(rows)
+            print(f"Updated perf stats for existing row: {log_path.name}")
+        else:
+            print(f"Row for {log_path.name} already complete — skipping.")
     else:
         rows.append(new_row)
         save_csv(rows)
