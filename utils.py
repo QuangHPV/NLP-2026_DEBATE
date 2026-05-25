@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-API_URL = "https://llmapi.paratera.com"
+API_URL = os.environ.get("OPENAI_BASE_URL", "https://llmapi.paratera.com")
 BASE_URL = f"{API_URL}/v1/"
 
 client = OpenAI(
@@ -14,9 +14,11 @@ client = OpenAI(
     base_url=BASE_URL,
 )
 
-student_model = "DeepSeek-V4-Flash"
-judger_model = "DeepSeek-V4-Pro"
-material_model = "DeepSeek-V4-Pro"
+_is_deepseek = "deepseek.com" in API_URL
+
+student_model = "deepseek-v4-flash" if _is_deepseek else "DeepSeek-V4-Flash"
+judger_model = "deepseek-v4-pro" if _is_deepseek else "DeepSeek-V4-Pro"
+material_model = "deepseek-v4-pro" if _is_deepseek else "DeepSeek-V4-Pro"
 
 
 def chat(messages: list[dict[str, str]], model: str) -> dict:
