@@ -4,6 +4,7 @@ log_result.py — Record a debate result into leaderboard.csv and regenerate LEA
 
 Usage:
     python scripts/log_result.py debate_logs/<result_file>.json
+    python scripts/log_result.py --folder debate_logs
 
 Workflow:
     1. Run a debate.
@@ -12,6 +13,7 @@ Workflow:
     4. Commit: git add debate_logs/ leaderboard.csv LEADERBOARD.md && git commit
 """
 
+import argparse
 import csv
 import json
 import re
@@ -48,12 +50,24 @@ def commit_for_file_at(filepath, before_dt):
 
 def parse_debate_timestamp(log_filename):
     """Extract datetime from filename like: ..._2026-05-18_16-25-21.json"""
-    m = re.search(r"(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.json$", log_filename)
+    m = LOG_FILENAME_RE.search(log_filename)
     if not m:
         raise ValueError(f"Cannot parse timestamp from filename: {log_filename}")
     date_str, time_str = m.group(1), m.group(2).replace("-", ":")
     tz = timezone(TZ_OFFSET)
     return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
+
+
+def is_debate_log_file(path):
+    return path.is_file() and LOG_FILENAME_RE.search(path.name) is not None
+
+
+def collect_log_paths(target_path):
+    if target_path.is_dir():
+        return sorted(p for p in target_path.glob("*.json") if is_debate_log_file(p))
+    if is_debate_log_file(target_path):
+        return [target_path]
+    raise ValueError(f"{target_path} is not a debate log file or folder of debate logs")
 
 
 def load_csv():
@@ -69,12 +83,25 @@ FIELDNAMES = [
     "aff_calls", "neg_calls", "aff_max_turn_s", "neg_max_turn_s",
 ]
 
+LOG_FILENAME_RE = re.compile(r"(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.json$")
+
 
 def save_csv(rows):
     with open(LEADERBOARD_CSV, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+
+
+def sort_rows(rows):
+    return sorted(rows, key=lambda r: (r.get("date", ""), r.get("log_file", "")))
+
+
+def display_path(path):
+    try:
+        return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(path)
 
 
 def extract_perf(data):
@@ -155,86 +182,128 @@ def render_md(rows):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Record debate results into leaderboard.csv and regenerate LEADERBOARD.md")
+    parser.add_argument("target", nargs="?", help="A debate result JSON file or a folder containing debate result JSON files")
+    parser.add_argument("--folder", dest="folder", help="Explicitly process all debate result JSON files in this folder")
+    parser.add_argument("--regen", action="store_true", help="Regenerate LEADERBOARD.md from leaderboard.csv without adding new rows")
+    args = parser.parse_args()
+
     # --regen: skip CSV append and just regenerate LEADERBOARD.md from existing CSV
-    if "--regen" in sys.argv:
+    if args.regen:
         rows = load_csv()
         LEADERBOARD_MD.write_text(render_md(rows))
-        print(f"Regenerated {LEADERBOARD_MD} from existing CSV ({len(rows)} rows)")
+        print(f"Regenerated {display_path(LEADERBOARD_MD)} from existing CSV ({len(rows)} rows)")
         return
 
-    if len(sys.argv) != 2:
-        print("Usage: python scripts/log_result.py debate_logs/<result>.json [--regen]")
+    if args.target and args.folder:
+        print("Error: use either a positional target path or --folder, not both")
         sys.exit(1)
-
-    log_path = Path(sys.argv[1])
-    if not log_path.is_absolute():
-        log_path = REPO_ROOT / log_path
-
-    if not log_path.exists():
-        print(f"Error: {log_path} not found")
-        sys.exit(1)
-
-    with open(log_path) as f:
-        data = json.load(f)
-
-    debate_dt = parse_debate_timestamp(log_path.name)
-    date_str = debate_dt.strftime("%Y-%m-%d")
-
-    aff_name = data.get("affirmative_name") or data["Affirmative Name"]
-    neg_name = data.get("negative_name") or data["Negative Name"]
-    material = data["material_name"]
-    votes = data["judge_votes"]
-    aff_votes = votes.count("affirmative")
-    neg_votes = votes.count("negative")
-    winner = data["winner"]
-
-    aff_commit = commit_for_file_at(f"students/{aff_name}.py", debate_dt)
-    neg_commit = commit_for_file_at(f"students/{neg_name}.py", debate_dt)
-    mat_commit = commit_for_file_at(f"materials/{material}", debate_dt)
-
-    if not aff_commit:
-        print(f"Warning: could not find commit for students/{aff_name}.py before {debate_dt}")
-    if not neg_commit:
-        print(f"Warning: could not find commit for students/{neg_name}.py before {debate_dt}")
-
-    perf = extract_perf(data)
-
-    new_row = {
-        "date": date_str,
-        "affirmative": aff_name,
-        "aff_commit": aff_commit,
-        "negative": neg_name,
-        "neg_commit": neg_commit,
-        "material": material,
-        "material_commit": mat_commit,
-        "log_file": log_path.name,
-        "aff_votes": aff_votes,
-        "neg_votes": neg_votes,
-        "winner": winner,
-        **perf,
-    }
 
     rows = load_csv()
+    row_index_by_log = {r["log_file"]: r for r in rows}
 
-    existing = next((r for r in rows if r["log_file"] == log_path.name), None)
-    if existing is not None:
-        # Update perf stats if any of the new columns are missing in the stored row
-        missing = not all(existing.get(k) for k in ("aff_calls", "neg_calls"))
-        if missing:
-            existing.update(perf)
-            save_csv(rows)
-            print(f"Updated perf stats for existing row: {log_path.name}")
-        else:
-            print(f"Row for {log_path.name} already complete — skipping.")
-    else:
+    target = Path(args.folder or args.target or "")
+    if not target:
+        print("Usage: python scripts/log_result.py [--folder debate_logs] <result.json>")
+        sys.exit(1)
+
+    if not target.is_absolute():
+        target = REPO_ROOT / target
+
+    if not target.exists():
+        print(f"Error: {display_path(target)} not found")
+        sys.exit(1)
+
+    try:
+        log_paths = collect_log_paths(target)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    if not log_paths:
+        print(f"No debate result JSON files found in {target}")
+        sys.exit(1)
+
+    changed = False
+    added_count = 0
+    updated_count = 0
+    last_result = None
+
+    for log_path in log_paths:
+        with open(log_path) as f:
+            data = json.load(f)
+
+        debate_dt = parse_debate_timestamp(log_path.name)
+        date_str = debate_dt.strftime("%Y-%m-%d")
+
+        aff_name = data.get("affirmative_name") or data["Affirmative Name"]
+        neg_name = data.get("negative_name") or data["Negative Name"]
+        material = data["material_name"]
+        votes = data["judge_votes"]
+        aff_votes = votes.count("affirmative")
+        neg_votes = votes.count("negative")
+        winner = data["winner"]
+
+        aff_commit = commit_for_file_at(f"students/{aff_name}.py", debate_dt)
+        neg_commit = commit_for_file_at(f"students/{neg_name}.py", debate_dt)
+        mat_commit = commit_for_file_at(f"materials/{material}", debate_dt)
+
+        if not aff_commit:
+            print(f"Warning: could not find commit for students/{aff_name}.py before {debate_dt}")
+        if not neg_commit:
+            print(f"Warning: could not find commit for students/{neg_name}.py before {debate_dt}")
+
+        perf = extract_perf(data)
+        new_row = {
+            "date": date_str,
+            "affirmative": aff_name,
+            "aff_commit": aff_commit,
+            "negative": neg_name,
+            "neg_commit": neg_commit,
+            "material": material,
+            "material_commit": mat_commit,
+            "log_file": log_path.name,
+            "aff_votes": aff_votes,
+            "neg_votes": neg_votes,
+            "winner": winner,
+            **perf,
+        }
+
+        last_result = (aff_name, aff_commit, neg_name, neg_commit, aff_votes, neg_votes, winner)
+
+        existing = row_index_by_log.get(log_path.name)
+        if existing is not None:
+            missing = not all(existing.get(k) for k in ("aff_calls", "neg_calls"))
+            if missing:
+                existing.update(perf)
+                updated_count += 1
+                changed = True
+            continue
+
         rows.append(new_row)
+        row_index_by_log[log_path.name] = new_row
+        added_count += 1
+        changed = True
+
+    if changed:
+        rows = sort_rows(rows)
         save_csv(rows)
-        print(f"Appended row for {log_path.name}")
+        if added_count:
+            print(f"Appended {added_count} new row(s)")
+        if updated_count:
+            print(f"Updated perf stats for {updated_count} existing row(s)")
+    else:
+        print("No new rows to add")
 
     md = render_md(rows)
     LEADERBOARD_MD.write_text(md)
-    print(f"Regenerated {LEADERBOARD_MD}")
-    print(f"\nResult: {aff_name} ({aff_commit[:7]}) vs {neg_name} ({neg_commit[:7]}) — {aff_votes}-{neg_votes} — winner: {winner}")
+    print(f"Regenerated {display_path(LEADERBOARD_MD)}")
+
+    if len(log_paths) == 1 and last_result is not None:
+        aff_name, aff_commit, neg_name, neg_commit, aff_votes, neg_votes, winner = last_result
+        print(f"\nResult: {aff_name} ({aff_commit[:7]}) vs {neg_name} ({neg_commit[:7]}) — {aff_votes}-{neg_votes} — winner: {winner}")
+    else:
+        print(f"Processed {len(log_paths)} log file(s) from {display_path(target)}")
 
 
 if __name__ == "__main__":
